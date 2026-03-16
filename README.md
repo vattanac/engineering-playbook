@@ -49,4 +49,4 @@ This playbook is intended to:
 
 ---
 
-> *Maintained by [Sim Vattanac] — continuously updated as knowledge evolves.*
+> *Maintained by Sim Vattanac — continuously updated as knowledge evolves.*
