@@ -1,0 +1,1962 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kubernetes Stateless vs Stateful &mdash; Complete Beginner Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ===== VARIABLES ===== */
+:root {
+  --primary: #6366f1;
+  --primary-light: #818cf8;
+  --primary-dark: #4f46e5;
+  --primary-glow: rgba(99,102,241,0.3);
+  --secondary: #06b6d4;
+  --accent: #f59e0b;
+  --accent-light: #fbbf24;
+  --success: #10b981;
+  --success-light: #34d399;
+  --danger: #ef4444;
+  --danger-light: #f87171;
+  --purple: #a855f7;
+  --pink: #ec4899;
+  --bg: #0f172a;
+  --bg-card: #1e293b;
+  --bg-elevated: #334155;
+  --text: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --border: rgba(148,163,184,0.12);
+  --border-glow: rgba(99,102,241,0.25);
+  --glass: rgba(30,41,59,0.7);
+  --code-bg: #0d1117;
+  --radius: 16px;
+  --radius-sm: 10px;
+  --radius-xs: 6px;
+  --shadow: 0 4px 24px rgba(0,0,0,0.3);
+  --shadow-glow: 0 0 30px rgba(99,102,241,0.15);
+  --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  --sidebar-width: 280px;
+}
+
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 30px; }
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.75;
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection { background: var(--primary); color: white; }
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--bg-elevated); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--primary); }
+
+/* ===== BACKGROUND ===== */
+.bg-grid {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    radial-gradient(ellipse 60% 50% at 50% 0%, rgba(99,102,241,0.1) 0%, transparent 60%),
+    radial-gradient(circle at 80% 80%, rgba(236,72,153,0.05) 0%, transparent 50%),
+    linear-gradient(var(--border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 60px 60px, 60px 60px;
+}
+
+/* ===== PROGRESS BAR ===== */
+.progress-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--primary), var(--purple), var(--pink));
+  z-index: 200;
+  transition: width 0.1s;
+}
+
+/* ============================================ */
+/*              LEFT SIDEBAR                     */
+/* ============================================ */
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: var(--sidebar-width);
+  height: 100vh;
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(20px);
+  border-right: 1px solid var(--border);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Sidebar header / brand */
+.sidebar-brand {
+  padding: 24px 20px 20px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.sidebar-brand-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--primary), var(--purple));
+  box-shadow: 0 0 20px rgba(99,102,241,0.3);
+  margin-bottom: 12px;
+}
+.sidebar-brand-icon svg { width: 22px; height: 22px; fill: white; }
+.sidebar-brand h2 {
+  font-size: 0.95em;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+}
+.sidebar-brand p {
+  font-size: 0.72em;
+  color: var(--text-muted);
+  margin-top: 4px;
+  font-weight: 500;
+}
+
+/* Sidebar nav links */
+.sidebar-nav {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px 12px;
+}
+.sidebar-nav::-webkit-scrollbar { width: 4px; }
+.sidebar-nav::-webkit-scrollbar-thumb { background: var(--bg-elevated); border-radius: 2px; }
+
+.sidebar-group-label {
+  font-size: 0.65em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--text-muted);
+  padding: 12px 12px 6px;
+  display: block;
+}
+
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: var(--radius-xs);
+  text-decoration: none;
+  color: var(--text-secondary);
+  font-size: 0.82em;
+  font-weight: 500;
+  transition: var(--transition);
+  position: relative;
+  line-height: 1.4;
+  margin-bottom: 2px;
+}
+.sidebar-link:hover {
+  color: var(--text);
+  background: rgba(99,102,241,0.08);
+}
+.sidebar-link.active {
+  color: white;
+  background: linear-gradient(135deg, rgba(99,102,241,0.2), rgba(168,85,247,0.12));
+  box-shadow: inset 0 0 0 1px rgba(99,102,241,0.25);
+}
+.sidebar-link.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: linear-gradient(180deg, var(--primary), var(--purple));
+}
+.sidebar-link .link-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: rgba(148,163,184,0.08);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.78em;
+  font-weight: 700;
+  color: var(--primary-light);
+  flex-shrink: 0;
+}
+.sidebar-link.active .link-num {
+  background: rgba(99,102,241,0.3);
+  color: white;
+}
+
+/* Sidebar footer */
+.sidebar-footer {
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.sidebar-progress-label {
+  font-size: 0.7em;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+}
+.sidebar-progress-bar {
+  width: 100%;
+  height: 4px;
+  background: var(--bg-elevated);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.sidebar-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary), var(--purple));
+  border-radius: 4px;
+  transition: width 0.3s ease;
+  width: 0%;
+}
+
+/* ===== MOBILE SIDEBAR TOGGLE ===== */
+.sidebar-toggle {
+  display: none;
+  position: fixed;
+  bottom: 24px;
+  left: 24px;
+  width: 50px;
+  height: 50px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--primary), var(--purple));
+  color: white;
+  border: none;
+  cursor: pointer;
+  z-index: 150;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3em;
+  box-shadow: 0 4px 20px rgba(99,102,241,0.5);
+  transition: var(--transition);
+}
+.sidebar-toggle:hover { transform: scale(1.08); }
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 90;
+  backdrop-filter: blur(4px);
+}
+
+@media (max-width: 1024px) {
+  .sidebar { transform: translateX(-100%); }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-toggle { display: flex; }
+  .sidebar-overlay.open { display: block; }
+  .main-content { margin-left: 0 !important; }
+  .hero-section { margin-left: 0 !important; }
+}
+
+/* ============================================ */
+/*              MAIN CONTENT                     */
+/* ============================================ */
+.main-content {
+  margin-left: var(--sidebar-width);
+  transition: margin-left 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.hero-section {
+  margin-left: var(--sidebar-width);
+  transition: margin-left 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ===== HERO ===== */
+.hero {
+  position: relative;
+  padding: 80px 20px 60px;
+  text-align: center;
+  overflow: hidden;
+}
+.hero::before {
+  content: '';
+  position: absolute;
+  top: -200px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 800px;
+  height: 600px;
+  background: radial-gradient(circle, rgba(99,102,241,0.2) 0%, rgba(168,85,247,0.08) 40%, transparent 70%);
+  pointer-events: none;
+}
+.hero-k8s-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 80px;
+  height: 80px;
+  border-radius: 22px;
+  background: linear-gradient(135deg, var(--primary), var(--purple));
+  box-shadow: 0 0 50px rgba(99,102,241,0.4);
+  margin-bottom: 24px;
+  position: relative;
+  animation: float 4s ease-in-out infinite;
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+.hero-k8s-icon svg { width: 44px; height: 44px; fill: white; }
+.hero h1 {
+  font-size: 2.8em;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  position: relative;
+  background: linear-gradient(135deg, #fff 0%, #c7d2fe 50%, #818cf8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.hero .subtitle {
+  font-size: 1.1em;
+  color: var(--text-secondary);
+  margin-top: 12px;
+  position: relative;
+}
+.hero-badges {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 22px;
+  position: relative;
+}
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  border-radius: 99px;
+  font-size: 0.8em;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: var(--glass);
+  backdrop-filter: blur(12px);
+  color: var(--text-secondary);
+}
+.hero-badge .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--success);
+  box-shadow: 0 0 6px var(--success);
+}
+
+/* ===== CONTAINER ===== */
+.container {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 0 28px 80px;
+}
+
+/* ===== SECTION ===== */
+.section {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 38px;
+  margin-top: 30px;
+  box-shadow: var(--shadow);
+  transition: var(--transition);
+  position: relative;
+  overflow: hidden;
+}
+.section:hover {
+  border-color: var(--border-glow);
+  box-shadow: var(--shadow), var(--shadow-glow);
+}
+.section-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--primary-light);
+  margin-bottom: 6px;
+}
+.section h2 {
+  font-size: 1.55em;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-bottom: 6px;
+  color: var(--text);
+}
+.section-divider {
+  width: 50px;
+  height: 3px;
+  background: linear-gradient(90deg, var(--primary), var(--purple));
+  border-radius: 2px;
+  margin-bottom: 20px;
+}
+.section h3 {
+  font-size: 1.15em;
+  font-weight: 700;
+  color: var(--text);
+  margin: 26px 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.section h3 .icon { font-size: 1.05em; }
+.section p { color: var(--text-secondary); margin-bottom: 14px; }
+.section strong { color: var(--text); }
+
+/* ===== ANALOGY ===== */
+.analogy {
+  position: relative;
+  background: linear-gradient(135deg, rgba(245,158,11,0.07), rgba(251,191,36,0.03));
+  border: 1px solid rgba(245,158,11,0.18);
+  border-radius: var(--radius-sm);
+  padding: 22px 26px;
+  margin: 20px 0;
+}
+.analogy::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; bottom: 0;
+  width: 4px;
+  background: linear-gradient(180deg, var(--accent), var(--accent-light));
+  border-radius: 4px 0 0 4px;
+}
+.analogy .label {
+  font-weight: 700;
+  color: var(--accent);
+  font-size: 0.76em;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin-bottom: 8px;
+}
+.analogy p { color: var(--text-secondary); margin-bottom: 10px; }
+.analogy p:last-child { margin-bottom: 0; }
+
+/* ===== INFO BOXES ===== */
+.info-box {
+  border-radius: var(--radius-sm);
+  padding: 20px 24px;
+  margin: 20px 0;
+  border: 1px solid;
+  position: relative;
+}
+.info-box::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; bottom: 0;
+  width: 4px;
+  border-radius: 4px 0 0 4px;
+}
+.info-box.blue { background: rgba(99,102,241,0.06); border-color: rgba(99,102,241,0.2); }
+.info-box.blue::before { background: var(--primary); }
+.info-box.green { background: rgba(16,185,129,0.06); border-color: rgba(16,185,129,0.2); }
+.info-box.green::before { background: var(--success); }
+.info-box.red { background: rgba(239,68,68,0.06); border-color: rgba(239,68,68,0.2); }
+.info-box.red::before { background: var(--danger); }
+.info-box.yellow { background: rgba(245,158,11,0.06); border-color: rgba(245,158,11,0.2); }
+.info-box.yellow::before { background: var(--accent); }
+.info-box .box-title { font-weight: 700; margin-bottom: 8px; color: var(--text); }
+.info-box p { color: var(--text-secondary); }
+
+/* ===== CODE BLOCKS ===== */
+.code-block {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 22px 24px;
+  margin: 18px 0;
+  overflow-x: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.83em;
+  line-height: 1.7;
+  position: relative;
+}
+.code-block .file-label {
+  position: absolute;
+  top: 0; right: 0;
+  background: linear-gradient(135deg, var(--primary), var(--purple));
+  color: white;
+  padding: 4px 16px;
+  border-radius: 0 var(--radius-sm) 0 var(--radius-sm);
+  font-size: 0.78em;
+  font-weight: 600;
+  font-family: 'Inter', sans-serif;
+}
+.code-block .dots { display: flex; gap: 6px; margin-bottom: 14px; }
+.code-block .dots span { width: 11px; height: 11px; border-radius: 50%; }
+.code-block .dots .d1 { background: #ff5f57; }
+.code-block .dots .d2 { background: #febc2e; }
+.code-block .dots .d3 { background: #28c840; }
+.code-block pre { white-space: pre; color: #a5b4c8; }
+.ck { color: #7dd3fc; }
+.cv { color: #fbbf24; }
+.cc { color: #4b5e74; font-style: italic; }
+.cs { color: #c4b5fd; }
+.cn { color: #f472b6; }
+
+/* ===== TABLE ===== */
+.table-wrapper {
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  margin: 20px 0;
+}
+.comparison-table { width: 100%; border-collapse: collapse; }
+.comparison-table th {
+  background: linear-gradient(135deg, var(--primary-dark), var(--primary));
+  color: white;
+  padding: 13px 18px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.88em;
+}
+.comparison-table td {
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 0.9em;
+}
+.comparison-table tr:nth-child(even) td { background: rgba(99,102,241,0.03); }
+.comparison-table tr:hover td { background: rgba(99,102,241,0.06); }
+.comparison-table tr:last-child td { border-bottom: none; }
+
+/* ===== VISUAL DIAGRAM ===== */
+.visual-diagram {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 30px 20px;
+  margin: 22px 0;
+  position: relative;
+  overflow: hidden;
+}
+.visual-diagram::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 30%, rgba(99,102,241,0.06) 0%, transparent 70%);
+  pointer-events: none;
+}
+.diagram-label {
+  text-align: center;
+  font-style: italic;
+  color: var(--text-muted);
+  margin-top: 10px;
+  font-size: 0.85em;
+}
+
+/* Animated nodes */
+.vd-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 14px;
+  position: relative;
+  z-index: 1;
+}
+.vd-row + .vd-row { margin-top: 10px; }
+
+.vd-node {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.82em;
+  font-weight: 600;
+  text-align: center;
+  position: relative;
+  animation: nodeAppear 0.6s ease both;
+}
+@keyframes nodeAppear {
+  from { opacity: 0; transform: scale(0.8) translateY(10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.vd-node.user {
+  background: linear-gradient(135deg, #818cf8, #6366f1);
+  color: white;
+  box-shadow: 0 4px 20px rgba(99,102,241,0.3);
+  animation-delay: 0s;
+}
+.vd-node.lb {
+  background: linear-gradient(135deg, #06b6d4, #0891b2);
+  color: white;
+  box-shadow: 0 4px 20px rgba(6,182,212,0.3);
+  padding: 12px 28px;
+  font-size: 0.88em;
+  animation-delay: 0.2s;
+}
+.vd-node.pod {
+  background: rgba(99,102,241,0.12);
+  border: 2px solid rgba(99,102,241,0.4);
+  color: var(--primary-light);
+  padding: 12px 18px;
+  min-width: 100px;
+  transition: var(--transition);
+}
+.vd-node.pod:hover {
+  background: rgba(99,102,241,0.2);
+  border-color: var(--primary);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(99,102,241,0.2);
+}
+.vd-node.pod:nth-child(1) { animation-delay: 0.4s; }
+.vd-node.pod:nth-child(2) { animation-delay: 0.55s; }
+.vd-node.pod:nth-child(3) { animation-delay: 0.7s; }
+
+.vd-node.pvc {
+  background: rgba(236,72,153,0.1);
+  border: 2px solid rgba(236,72,153,0.35);
+  color: var(--pink);
+  padding: 10px 16px;
+  min-width: 90px;
+  font-size: 0.78em;
+}
+.vd-node.pvc:nth-child(1) { animation-delay: 0.9s; }
+.vd-node.pvc:nth-child(2) { animation-delay: 1.05s; }
+.vd-node.pvc:nth-child(3) { animation-delay: 1.2s; }
+
+.vd-node.disk {
+  background: rgba(245,158,11,0.1);
+  border: 2px solid rgba(245,158,11,0.3);
+  color: var(--accent);
+  padding: 8px 14px;
+  min-width: 80px;
+  font-size: 0.75em;
+}
+.vd-node.disk:nth-child(1) { animation-delay: 1.35s; }
+.vd-node.disk:nth-child(2) { animation-delay: 1.5s; }
+.vd-node.disk:nth-child(3) { animation-delay: 1.65s; }
+
+.vd-node.headless {
+  background: linear-gradient(135deg, rgba(168,85,247,0.2), rgba(236,72,153,0.1));
+  border: 2px solid rgba(168,85,247,0.4);
+  color: var(--purple);
+  padding: 12px 24px;
+  font-size: 0.85em;
+  animation-delay: 0.2s;
+}
+.vd-node.pod-stateful {
+  background: rgba(236,72,153,0.08);
+  border: 2px solid rgba(236,72,153,0.35);
+  color: var(--pink);
+  padding: 12px 16px;
+  min-width: 100px;
+}
+
+.vd-node.concept {
+  background: rgba(99,102,241,0.08);
+  border: 2px dashed rgba(99,102,241,0.25);
+  color: var(--primary-light);
+  padding: 14px 22px;
+}
+.vd-node.inner {
+  background: rgba(6,182,212,0.12);
+  border: 2px solid rgba(6,182,212,0.35);
+  color: var(--secondary);
+  padding: 10px 18px;
+  font-size: 0.8em;
+}
+
+/* Connectors */
+.vd-connector {
+  display: flex;
+  justify-content: center;
+  margin: 6px 0;
+  position: relative;
+  z-index: 1;
+}
+.vd-arrow {
+  width: 2px;
+  height: 28px;
+  background: linear-gradient(180deg, rgba(99,102,241,0.6), rgba(99,102,241,0.2));
+  position: relative;
+  animation: arrowPulse 2s ease-in-out infinite;
+}
+@keyframes arrowPulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+.vd-arrow::after {
+  content: '';
+  position: absolute;
+  bottom: -5px;
+  left: -4px;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 6px solid rgba(99,102,241,0.5);
+}
+.vd-arrow.pink {
+  background: linear-gradient(180deg, rgba(236,72,153,0.6), rgba(236,72,153,0.2));
+}
+.vd-arrow.pink::after { border-top-color: rgba(236,72,153,0.5); }
+.vd-arrow.amber {
+  background: linear-gradient(180deg, rgba(245,158,11,0.6), rgba(245,158,11,0.2));
+}
+.vd-arrow.amber::after { border-top-color: rgba(245,158,11,0.5); }
+
+.vd-fan {
+  display: flex;
+  justify-content: center;
+  gap: 80px;
+  margin: 6px 0;
+  position: relative;
+  z-index: 1;
+}
+.vd-fan-line {
+  width: 2px;
+  height: 24px;
+  background: rgba(99,102,241,0.35);
+}
+
+/* Request dot animation */
+.vd-dot-track {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  margin-left: -4px;
+  border-radius: 50%;
+  background: var(--primary-light);
+  box-shadow: 0 0 10px var(--primary);
+  animation: dotMove 2.5s ease-in-out infinite;
+  z-index: 2;
+}
+@keyframes dotMove {
+  0% { top: 0; opacity: 1; }
+  40% { top: 100%; opacity: 1; }
+  60% { top: 100%; opacity: 0; }
+  100% { top: 0; opacity: 0; }
+}
+
+/* Identical badge */
+.vd-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 6px;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.7em;
+  font-weight: 600;
+  margin-top: 8px;
+}
+.vd-badge.identical { background: rgba(99,102,241,0.15); color: var(--primary-light); }
+.vd-badge.unique { background: rgba(236,72,153,0.15); color: var(--pink); }
+
+.vd-caption {
+  text-align: center;
+  font-size: 0.82em;
+  color: var(--text-muted);
+  margin-top: 16px;
+  font-family: 'Inter', sans-serif;
+  line-height: 1.5;
+  position: relative;
+  z-index: 1;
+}
+.vd-caption strong { color: var(--text-secondary); }
+
+/* Nested box for Pod concept */
+.vd-box {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  border: 2px dashed rgba(99,102,241,0.3);
+  border-radius: 14px;
+  padding: 20px 30px;
+  background: rgba(99,102,241,0.04);
+  position: relative;
+  z-index: 1;
+}
+.vd-box-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.8em;
+  font-weight: 700;
+  color: var(--primary-light);
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.vd-box-inner {
+  border: 2px solid rgba(6,182,212,0.4);
+  border-radius: 10px;
+  padding: 14px 24px;
+  background: rgba(6,182,212,0.08);
+  color: var(--secondary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85em;
+  font-weight: 600;
+}
+
+/* Flow chain for PV/PVC */
+.vd-flow-chain {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+  z-index: 1;
+}
+.vd-flow-node {
+  padding: 10px 22px;
+  border-radius: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.82em;
+  font-weight: 600;
+  text-align: center;
+  animation: nodeAppear 0.6s ease both;
+}
+.vd-flow-arrow {
+  width: 2px;
+  height: 22px;
+  background: rgba(148,163,184,0.3);
+  position: relative;
+}
+.vd-flow-arrow::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: -3px;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid rgba(148,163,184,0.4);
+}
+
+/* Diagram old class kept for compat with headless service section */
+.diagram {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 26px;
+  margin: 20px 0;
+  text-align: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.82em;
+  line-height: 1.8;
+  overflow-x: auto;
+  white-space: pre;
+  color: #7dd3fc;
+}
+
+/* ===== TWO-COL ===== */
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 20px 0; }
+@media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
+.col-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 22px;
+  background: var(--bg-card);
+  transition: var(--transition);
+  position: relative;
+  overflow: hidden;
+}
+.col-card:hover {
+  border-color: var(--border-glow);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-glow);
+}
+.col-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+}
+.col-card.blue-border::before { background: linear-gradient(90deg, var(--primary), var(--secondary)); }
+.col-card.pink-border::before { background: linear-gradient(90deg, var(--pink), var(--danger)); }
+.col-card h4 { font-size: 1em; font-weight: 700; color: var(--text); margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+.col-card p { color: var(--text-secondary); font-size: 0.9em; }
+.col-card ul { padding-left: 20px; margin-top: 10px; }
+.col-card li { color: var(--text-secondary); margin-bottom: 5px; font-size: 0.9em; }
+
+/* ===== TAGS ===== */
+.tag { display: inline-flex; padding: 3px 12px; border-radius: 99px; font-size: 0.74em; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; }
+.tag.stateless { background: rgba(99,102,241,0.15); color: var(--primary-light); border: 1px solid rgba(99,102,241,0.3); }
+.tag.stateful { background: rgba(236,72,153,0.15); color: var(--pink); border: 1px solid rgba(236,72,153,0.3); }
+
+/* ===== STEPS ===== */
+.step { display: flex; gap: 14px; margin: 20px 0; align-items: flex-start; }
+.step-num {
+  flex-shrink: 0; width: 40px; height: 40px;
+  background: linear-gradient(135deg, var(--primary), var(--purple));
+  color: white; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 800; font-size: 1em;
+  box-shadow: 0 4px 12px rgba(99,102,241,0.3);
+}
+.step-content { flex: 1; padding-top: 7px; }
+.step-content strong { color: var(--text); }
+.step-content p { color: var(--text-secondary); }
+
+/* ===== FLOW ===== */
+.flow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; margin: 20px 0; }
+.flow-item { background: linear-gradient(135deg, var(--primary-dark), var(--primary)); color: white; padding: 9px 16px; border-radius: var(--radius-xs); font-weight: 600; font-size: 0.82em; box-shadow: 0 4px 12px rgba(99,102,241,0.2); }
+.flow-item.green { background: linear-gradient(135deg, #059669, var(--success)); }
+.flow-arrow { font-size: 1.3em; color: var(--text-muted); }
+
+/* ===== CHECKLIST ===== */
+.checklist { list-style: none; padding: 0; }
+.checklist li { padding: 8px 0 8px 34px; position: relative; color: var(--text-secondary); font-size: 0.93em; }
+.checklist li::before {
+  content: ''; position: absolute; left: 0; top: 11px;
+  width: 18px; height: 18px; border-radius: 5px;
+  background: linear-gradient(135deg, var(--success), var(--success-light));
+  box-shadow: 0 2px 8px rgba(16,185,129,0.3);
+}
+.checklist li::after {
+  content: ''; position: absolute; left: 4px; top: 15px;
+  width: 9px; height: 5px;
+  border-left: 2px solid white; border-bottom: 2px solid white;
+  transform: rotate(-45deg);
+}
+
+/* ===== WARNING ===== */
+.warning {
+  background: rgba(239,68,68,0.06);
+  border: 1px solid rgba(239,68,68,0.2);
+  border-radius: var(--radius-sm);
+  padding: 20px 24px;
+  margin: 16px 0;
+  position: relative;
+}
+.warning::before {
+  content: ''; position: absolute;
+  top: 0; left: 0; bottom: 0;
+  width: 4px; background: var(--danger);
+  border-radius: 4px 0 0 4px;
+}
+.warning strong { color: var(--danger-light); }
+.warning p { color: var(--text-secondary); margin-top: 6px; }
+
+/* ===== FOOTER ===== */
+footer {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-muted);
+  font-size: 0.85em;
+  border-top: 1px solid var(--border);
+  margin-top: 20px;
+}
+footer .heart { color: var(--danger); }
+
+/* ===== SCROLL TOP ===== */
+.scroll-top {
+  position: fixed; bottom: 28px; right: 28px;
+  width: 44px; height: 44px; border-radius: 13px;
+  background: linear-gradient(135deg, var(--primary), var(--purple));
+  color: white; border: none; cursor: pointer;
+  display: none; align-items: center; justify-content: center;
+  font-size: 1.2em;
+  box-shadow: 0 4px 20px rgba(99,102,241,0.4);
+  transition: var(--transition); z-index: 99;
+}
+.scroll-top:hover { transform: translateY(-3px); }
+.scroll-top.show { display: flex; }
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 640px) {
+  .hero h1 { font-size: 1.9em; }
+  .section { padding: 22px; }
+  .code-block { padding: 14px; font-size: 0.76em; }
+}
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progressBar"></div>
+<div class="bg-grid"></div>
+
+<!-- ======== SIDEBAR ======== -->
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-brand">
+    <div class="sidebar-brand-icon">
+      <svg viewBox="0 0 722 702" xmlns="http://www.w3.org/2000/svg"><path d="M358.986 6.494c-10.2-1.2-20.7 1.5-29.4 8.7l-257.1 180c-8.7 6-14.7 15.3-17.1 25.5l-54 306c-2.4 10.8.6 21.9 7.5 30.6l189 243c6.9 8.7 17.1 14.4 28.2 14.7l315 6c11.1.3 21.6-4.8 29.1-13.2l195-237c7.5-8.7 10.5-20.1 8.7-30.9l-42-306c-1.8-10.8-8.4-20.1-17.4-26.1l-249-189c-6.6-5.1-14.4-7.8-22.2-8.4z" fill="white" opacity="0.15"/></svg>
+    </div>
+    <h2>K8s Stateless<br>vs Stateful</h2>
+    <p>Complete Beginner Guide</p>
+    <p style="margin-top:8px;font-size:0.65em;color:var(--text-muted);opacity:0.7;">&copy; 2026 Sim Vattanac</p>
+  </div>
+
+  <nav class="sidebar-nav" id="sidebarNav">
+    <span class="sidebar-group-label">Foundations</span>
+    <a href="#s1" class="sidebar-link" data-section="s1">
+      <span class="link-num">01</span> What is "State"?
+    </a>
+    <a href="#s2" class="sidebar-link" data-section="s2">
+      <span class="link-num">02</span> Restaurant vs Hospital
+    </a>
+    <a href="#s3" class="sidebar-link" data-section="s3">
+      <span class="link-num">03</span> Stateless Deep Dive
+    </a>
+    <a href="#s4" class="sidebar-link" data-section="s4">
+      <span class="link-num">04</span> Stateful Deep Dive
+    </a>
+    <a href="#s5" class="sidebar-link" data-section="s5">
+      <span class="link-num">05</span> Comparison Table
+    </a>
+
+    <span class="sidebar-group-label">Kubernetes Basics</span>
+    <a href="#s6" class="sidebar-link" data-section="s6">
+      <span class="link-num">06</span> K8s Concepts First
+    </a>
+    <a href="#s7" class="sidebar-link" data-section="s7">
+      <span class="link-num">07</span> Deploy Stateless
+    </a>
+    <a href="#s8" class="sidebar-link" data-section="s8">
+      <span class="link-num">08</span> Deploy Stateful
+    </a>
+
+    <span class="sidebar-group-label">Advanced Topics</span>
+    <a href="#s9" class="sidebar-link" data-section="s9">
+      <span class="link-num">09</span> Why Stateful is Harder
+    </a>
+    <a href="#s10" class="sidebar-link" data-section="s10">
+      <span class="link-num">10</span> Persistent Volumes
+    </a>
+    <a href="#s11" class="sidebar-link" data-section="s11">
+      <span class="link-num">11</span> Headless Service
+    </a>
+
+    <span class="sidebar-group-label">Full Examples</span>
+    <a href="#s12" class="sidebar-link" data-section="s12">
+      <span class="link-num">12</span> Example: Nginx
+    </a>
+    <a href="#s13" class="sidebar-link" data-section="s13">
+      <span class="link-num">13</span> Example: MySQL
+    </a>
+    <a href="#s14" class="sidebar-link" data-section="s14">
+      <span class="link-num">14</span> Scaling Differences
+    </a>
+
+    <span class="sidebar-group-label">Reference</span>
+    <a href="#s15" class="sidebar-link" data-section="s15">
+      <span class="link-num">15</span> When to Use Which?
+    </a>
+    <a href="#s16" class="sidebar-link" data-section="s16">
+      <span class="link-num">16</span> Common Mistakes
+    </a>
+    <a href="#s17" class="sidebar-link" data-section="s17">
+      <span class="link-num">17</span> Cheat Sheet
+    </a>
+  </nav>
+
+  <div class="sidebar-footer">
+    <div class="sidebar-progress-label">
+      <span>Progress</span>
+      <span id="progressPercent">0%</span>
+    </div>
+    <div class="sidebar-progress-bar">
+      <div class="sidebar-progress-fill" id="sidebarProgressFill"></div>
+    </div>
+  </div>
+</aside>
+
+<!-- ======== MOBILE TOGGLE ======== -->
+<button class="sidebar-toggle" id="sidebarToggle">&#9776;</button>
+
+<!-- ======== SCROLL TOP ======== -->
+<button class="scroll-top" id="scrollTop" onclick="window.scrollTo({top:0})">&#8593;</button>
+
+<!-- ======== HERO ======== -->
+<div class="hero-section">
+<div class="hero">
+  <div class="hero-k8s-icon">
+    <svg viewBox="0 0 722 702" xmlns="http://www.w3.org/2000/svg"><path d="M358.986 6.494c-10.2-1.2-20.7 1.5-29.4 8.7l-257.1 180c-8.7 6-14.7 15.3-17.1 25.5l-54 306c-2.4 10.8.6 21.9 7.5 30.6l189 243c6.9 8.7 17.1 14.4 28.2 14.7l315 6c11.1.3 21.6-4.8 29.1-13.2l195-237c7.5-8.7 10.5-20.1 8.7-30.9l-42-306c-1.8-10.8-8.4-20.1-17.4-26.1l-249-189c-6.6-5.1-14.4-7.8-22.2-8.4z" fill="white" opacity="0.15"/></svg>
+  </div>
+  <h1>Kubernetes: Stateless vs Stateful</h1>
+  <p class="subtitle">The complete beginner guide &mdash; from zero to confident</p>
+  <div class="hero-badges">
+    <span class="hero-badge"><span class="dot"></span> DevOps Fundamentals</span>
+    <span class="hero-badge">Step-by-Step</span>
+    <span class="hero-badge">Real Examples</span>
+    <span class="hero-badge">17 Sections</span>
+  </div>
+</div>
+</div>
+
+<!-- ======== MAIN CONTENT ======== -->
+<div class="main-content">
+<div class="container">
+
+<!-- SECTION 1 -->
+<div class="section" id="s1">
+  <div class="section-label">Section 01</div>
+  <h2>What is "State"?</h2>
+  <div class="section-divider"></div>
+  <p>Before Kubernetes, understand one word: <strong>"State"</strong>.</p>
+  <p><strong>State = Data that an application remembers over time.</strong></p>
+  <p>Some apps remember things (your login, shopping cart, messages). Some don't need to remember anything.</p>
+  <div class="analogy">
+    <div class="label">Real-Life Analogy</div>
+    <p><strong>A calculator app</strong> &mdash; Type 2 + 2, get 4, close it. No memory needed. <strong>No state</strong>.</p>
+    <p><strong>A bank app</strong> &mdash; Must remember your balance. Deposit $100, it MUST save that. <strong>Has state</strong>.</p>
+  </div>
+  <h3><span class="icon">&#9881;</span> Two Types of Applications</h3>
+  <div class="two-col">
+    <div class="col-card blue-border">
+      <h4><span class="tag stateless">Stateless</span> Application</h4>
+      <p>Does NOT save data between requests. Every request is brand new.</p>
+      <ul>
+        <li>Web servers (Nginx, Apache)</li>
+        <li>API gateways</li>
+        <li>Load balancers</li>
+        <li>Image resizing services</li>
+        <li>Token validators</li>
+      </ul>
+    </div>
+    <div class="col-card pink-border">
+      <h4><span class="tag stateful">Stateful</span> Application</h4>
+      <p>MUST save data. Data persists between requests and restarts.</p>
+      <ul>
+        <li>Databases (MySQL, PostgreSQL)</li>
+        <li>Message queues (Kafka, RabbitMQ)</li>
+        <li>Cache systems (Redis)</li>
+        <li>File storage systems</li>
+        <li>Search engines (Elasticsearch)</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 2 -->
+<div class="section" id="s2">
+  <div class="section-label">Section 02</div>
+  <h2>Real-World Analogy: Restaurant vs Hospital</h2>
+  <div class="section-divider"></div>
+  <div class="analogy">
+    <div class="label">Stateless = Fast Food Workers</div>
+    <p>Any worker can take your order. If Worker A is busy, Worker B helps. It doesn't matter WHO serves you. If a worker goes on break, another replaces them instantly. <strong>No worker needs to "remember" you.</strong></p>
+  </div>
+  <div class="analogy">
+    <div class="label">Stateful = Hospital with Patient Records</div>
+    <p>Each doctor has specific patients with <strong>medical records</strong>. You can't swap Doctor A with Doctor B &mdash; Doctor B doesn't know your history! Records are critical and <strong>must not be lost</strong>.</p>
+  </div>
+  <div class="info-box blue">
+    <div class="box-title">Key Takeaway</div>
+    <p><strong>Stateless</strong> = Workers are replaceable, no memory needed.<br>
+    <strong>Stateful</strong> = Each instance has unique data that MUST be preserved.</p>
+  </div>
+</div>
+
+<!-- SECTION 3 -->
+<div class="section" id="s3">
+  <div class="section-label">Section 03</div>
+  <h2>Stateless Applications &mdash; Deep Dive</h2>
+  <div class="section-divider"></div>
+  <h3><span class="icon">&#128269;</span> How Stateless Apps Work</h3>
+  <div class="visual-diagram">
+    <div class="vd-row"><div class="vd-node user">&#128100; User Request</div></div>
+    <div class="vd-connector"><div class="vd-arrow"><div class="vd-dot-track"></div></div></div>
+    <div class="vd-row"><div class="vd-node lb">&#9878; Load Balancer</div></div>
+    <div class="vd-fan"><div class="vd-fan-line"></div><div class="vd-fan-line"></div><div class="vd-fan-line"></div></div>
+    <div class="vd-row">
+      <div class="vd-node pod">&#128230; Pod 1</div>
+      <div class="vd-node pod">&#128230; Pod 2</div>
+      <div class="vd-node pod">&#128230; Pod 3</div>
+    </div>
+    <div class="vd-row"><span class="vd-badge identical">All Identical &mdash; Interchangeable</span></div>
+    <div class="vd-caption"><strong>Any pod</strong> can handle any request. If Pod 2 dies, others take over.<br>No data is lost because no data was stored!</div>
+  </div>
+  <p class="diagram-label">Stateless app: 3 identical pods behind a load balancer</p>
+  <h3><span class="icon">&#10003;</span> Characteristics</h3>
+  <ul class="checklist">
+    <li><strong>No local data storage</strong> &mdash; Nothing important saved on disk</li>
+    <li><strong>Identical pods</strong> &mdash; Every replica is the same</li>
+    <li><strong>Interchangeable</strong> &mdash; Any pod handles any request</li>
+    <li><strong>Easy to scale</strong> &mdash; Just add more pods!</li>
+    <li><strong>Easy to replace</strong> &mdash; Kill a pod, start new one</li>
+    <li><strong>No startup order</strong> &mdash; Start in any order</li>
+  </ul>
+  <h3><span class="icon">&#128165;</span> When a Pod Dies</h3>
+  <div class="flow">
+    <div class="flow-item">Pod 2 crashes</div>
+    <span class="flow-arrow">&rarr;</span>
+    <div class="flow-item">K8s detects it</div>
+    <span class="flow-arrow">&rarr;</span>
+    <div class="flow-item">Creates new Pod</div>
+    <span class="flow-arrow">&rarr;</span>
+    <div class="flow-item green">Works immediately!</div>
+  </div>
+</div>
+
+<!-- SECTION 4 -->
+<div class="section" id="s4">
+  <div class="section-label">Section 04</div>
+  <h2>Stateful Applications &mdash; Deep Dive</h2>
+  <div class="section-divider"></div>
+  <h3><span class="icon">&#128269;</span> How Stateful Apps Work</h3>
+  <div class="visual-diagram">
+    <div class="vd-row"><div class="vd-node user">&#128100; User Request</div></div>
+    <div class="vd-connector"><div class="vd-arrow"><div class="vd-dot-track"></div></div></div>
+    <div class="vd-row"><div class="vd-node headless">&#127760; Headless Service</div></div>
+    <div class="vd-fan"><div class="vd-fan-line"></div><div class="vd-fan-line"></div><div class="vd-fan-line"></div></div>
+    <div class="vd-row">
+      <div class="vd-node pod-stateful">&#128274; mysql-0</div>
+      <div class="vd-node pod-stateful">&#128274; mysql-1</div>
+      <div class="vd-node pod-stateful">&#128274; mysql-2</div>
+    </div>
+    <div class="vd-row"><span class="vd-badge unique">Each has a UNIQUE name</span></div>
+    <div class="vd-fan"><div class="vd-fan-line"></div><div class="vd-fan-line"></div><div class="vd-fan-line"></div></div>
+    <div class="vd-row">
+      <div class="vd-node pvc">&#128190; PVC-0</div>
+      <div class="vd-node pvc">&#128190; PVC-1</div>
+      <div class="vd-node pvc">&#128190; PVC-2</div>
+    </div>
+    <div class="vd-fan"><div class="vd-fan-line"></div><div class="vd-fan-line"></div><div class="vd-fan-line"></div></div>
+    <div class="vd-row">
+      <div class="vd-node disk">&#128451; Disk 0</div>
+      <div class="vd-node disk">&#128451; Disk 1</div>
+      <div class="vd-node disk">&#128451; Disk 2</div>
+    </div>
+    <div class="vd-caption"><strong>Each pod</strong> has a unique identity and its <strong>own dedicated disk</strong>.<br>If mysql-1 dies, the new mysql-1 gets the <strong>SAME disk</strong> back!</div>
+  </div>
+  <p class="diagram-label">Stateful app: unique names and dedicated storage per pod</p>
+  <h3><span class="icon">&#10003;</span> Characteristics</h3>
+  <ul class="checklist">
+    <li><strong>Persistent storage</strong> &mdash; Own disk that survives restarts</li>
+    <li><strong>Unique identity</strong> &mdash; Predictable names: app-0, app-1, app-2</li>
+    <li><strong>Ordered startup</strong> &mdash; 0 first, then 1, then 2</li>
+    <li><strong>Ordered shutdown</strong> &mdash; 2 first, then 1, then 0</li>
+    <li><strong>Stable network identity</strong> &mdash; Permanent DNS name per pod</li>
+    <li><strong>Not interchangeable</strong> &mdash; mysql-0 &#8800; mysql-1</li>
+  </ul>
+  <h3><span class="icon">&#128165;</span> When a Pod Dies</h3>
+  <div class="flow">
+    <div class="flow-item">mysql-1 crashes</div>
+    <span class="flow-arrow">&rarr;</span>
+    <div class="flow-item">K8s detects</div>
+    <span class="flow-arrow">&rarr;</span>
+    <div class="flow-item">New mysql-1</div>
+    <span class="flow-arrow">&rarr;</span>
+    <div class="flow-item">Same disk</div>
+    <span class="flow-arrow">&rarr;</span>
+    <div class="flow-item green">Data preserved!</div>
+  </div>
+</div>
+
+<!-- SECTION 5 -->
+<div class="section" id="s5">
+  <div class="section-label">Section 05</div>
+  <h2>Side-by-Side Comparison</h2>
+  <div class="section-divider"></div>
+  <div class="table-wrapper">
+  <table class="comparison-table">
+    <tr><th>Feature</th><th><span class="tag stateless">Stateless</span></th><th><span class="tag stateful">Stateful</span></th></tr>
+    <tr><td><strong>K8s Resource</strong></td><td>Deployment</td><td>StatefulSet</td></tr>
+    <tr><td><strong>Pod Names</strong></td><td>Random (nginx-7d9f8b-x4kl2)</td><td>Predictable (mysql-0, mysql-1)</td></tr>
+    <tr><td><strong>Storage</strong></td><td>None needed</td><td>Own Persistent Volume per pod</td></tr>
+    <tr><td><strong>Network ID</strong></td><td>Single Service IP</td><td>Own DNS per pod</td></tr>
+    <tr><td><strong>Scale Up</strong></td><td>Any order, instant</td><td>Ordered (0&rarr;1&rarr;2)</td></tr>
+    <tr><td><strong>Scale Down</strong></td><td>Any order</td><td>Reverse (2&rarr;1&rarr;0)</td></tr>
+    <tr><td><strong>Replacement</strong></td><td>Fresh pod</td><td>Same name + same disk</td></tr>
+    <tr><td><strong>Complexity</strong></td><td>Simple</td><td>Complex</td></tr>
+    <tr><td><strong>Examples</strong></td><td>Nginx, Node.js, React</td><td>MySQL, PostgreSQL, Kafka</td></tr>
+    <tr><td><strong>Service</strong></td><td>ClusterIP / LoadBalancer</td><td>Headless (clusterIP: None)</td></tr>
+  </table>
+  </div>
+</div>
+
+<!-- SECTION 6 -->
+<div class="section" id="s6">
+  <div class="section-label">Section 06</div>
+  <h2>Kubernetes Concepts You Need First</h2>
+  <div class="section-divider"></div>
+  <h3><span class="icon">&#128230;</span> Pod</h3>
+  <p>Smallest unit in K8s. A "wrapper" around your container. Usually one container per pod.</p>
+  <div class="visual-diagram">
+    <div class="vd-row">
+      <div class="vd-box">
+        <div class="vd-box-label">&#128230; Pod</div>
+        <div class="vd-box-inner">&#128225; Container<br><span style="font-size:0.85em;opacity:0.7;">(your app: nginx)</span></div>
+      </div>
+    </div>
+  </div>
+  <h3><span class="icon">&#128640;</span> Deployment (Stateless)</h3>
+  <p>Tells K8s: "Run 3 copies of my app. If one dies, make a new one." Manages stateless apps.</p>
+  <h3><span class="icon">&#128274;</span> StatefulSet (Stateful)</h3>
+  <p>Like Deployment but with <strong>superpowers</strong>: stable names, stable storage, ordered operations.</p>
+  <h3><span class="icon">&#128279;</span> Service</h3>
+  <p>A stable "phone number" for your pods. Pods come and go, but the Service IP stays the same.</p>
+  <h3><span class="icon">&#128190;</span> PV &amp; PVC</h3>
+  <p><strong>PV</strong> = actual disk. <strong>PVC</strong> = "I need X GB of disk." K8s matches them together.</p>
+  <div class="visual-diagram">
+    <div class="vd-flow-chain">
+      <div class="vd-flow-node" style="background:rgba(99,102,241,0.12);border:2px solid rgba(99,102,241,0.4);color:#818cf8;">&#128230; Pod says: "I need 10GB"</div>
+      <div class="vd-flow-arrow"></div>
+      <div class="vd-flow-node" style="background:rgba(168,85,247,0.1);border:2px solid rgba(168,85,247,0.35);color:#a855f7;">&#128196; PVC (request)</div>
+      <div class="vd-flow-arrow"></div>
+      <div class="vd-flow-node" style="background:rgba(236,72,153,0.1);border:2px solid rgba(236,72,153,0.35);color:#ec4899;">&#128190; PV (actual 10GB disk)</div>
+      <div class="vd-flow-arrow"></div>
+      <div class="vd-flow-node" style="background:rgba(245,158,11,0.1);border:2px solid rgba(245,158,11,0.3);color:#f59e0b;">&#9729; Real Storage (AWS EBS, GCP Disk, NFS)</div>
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 7 -->
+<div class="section" id="s7">
+  <div class="section-label">Section 07</div>
+  <h2>Deploying Stateless &mdash; Step by Step</h2>
+  <div class="section-divider"></div>
+  <p>Deploy Nginx web server. <strong>Stateless</strong> because it just serves pages &mdash; no data saved.</p>
+  <div class="step"><div class="step-num">1</div><div class="step-content"><strong>Create the Deployment YAML</strong></div></div>
+  <div class="code-block">
+    <span class="file-label">nginx-deployment.yaml</span>
+    <div class="dots"><span class="d1"></span><span class="d2"></span><span class="d3"></span></div>
+<pre>
+<span class="ck">apiVersion:</span> <span class="cv">apps/v1</span>
+<span class="ck">kind:</span> <span class="cv">Deployment</span>                   <span class="cc"># Stateless!</span>
+<span class="ck">metadata:</span>
+  <span class="ck">name:</span> <span class="cv">nginx-deployment</span>
+  <span class="ck">labels:</span>
+    <span class="ck">app:</span> <span class="cv">nginx</span>
+<span class="ck">spec:</span>
+  <span class="ck">replicas:</span> <span class="cn">3</span>                       <span class="cc"># 3 identical copies</span>
+  <span class="ck">selector:</span>
+    <span class="ck">matchLabels:</span>
+      <span class="ck">app:</span> <span class="cv">nginx</span>
+  <span class="ck">template:</span>
+    <span class="ck">metadata:</span>
+      <span class="ck">labels:</span>
+        <span class="ck">app:</span> <span class="cv">nginx</span>
+    <span class="ck">spec:</span>
+      <span class="ck">containers:</span>
+      - <span class="ck">name:</span> <span class="cv">nginx</span>
+        <span class="ck">image:</span> <span class="cv">nginx:1.25</span>
+        <span class="ck">ports:</span>
+        - <span class="ck">containerPort:</span> <span class="cn">80</span>
+        <span class="ck">resources:</span>
+          <span class="ck">requests:</span> { <span class="ck">memory:</span> <span class="cs">"64Mi"</span>, <span class="ck">cpu:</span> <span class="cs">"100m"</span> }
+          <span class="ck">limits:</span>   { <span class="ck">memory:</span> <span class="cs">"128Mi"</span>, <span class="ck">cpu:</span> <span class="cs">"250m"</span> }
+</pre></div>
+  <div class="step"><div class="step-num">2</div><div class="step-content"><strong>Create Service</strong></div></div>
+  <div class="code-block">
+    <span class="file-label">nginx-service.yaml</span>
+    <div class="dots"><span class="d1"></span><span class="d2"></span><span class="d3"></span></div>
+<pre>
+<span class="ck">apiVersion:</span> <span class="cv">v1</span>
+<span class="ck">kind:</span> <span class="cv">Service</span>
+<span class="ck">metadata:</span>
+  <span class="ck">name:</span> <span class="cv">nginx-service</span>
+<span class="ck">spec:</span>
+  <span class="ck">type:</span> <span class="cv">ClusterIP</span>
+  <span class="ck">selector:</span>  { <span class="ck">app:</span> <span class="cv">nginx</span> }
+  <span class="ck">ports:</span>
+  - <span class="ck">port:</span> <span class="cn">80</span>
+    <span class="ck">targetPort:</span> <span class="cn">80</span>
+</pre></div>
+  <div class="step"><div class="step-num">3</div><div class="step-content"><strong>Deploy</strong></div></div>
+  <div class="code-block"><div class="dots"><span class="d1"></span><span class="d2"></span><span class="d3"></span></div>
+<pre>
+$ kubectl apply -f nginx-deployment.yaml
+$ kubectl apply -f nginx-service.yaml
+$ kubectl get pods
+NAME                                READY   STATUS    AGE
+nginx-deployment-7d9f8b7945-ab12c   1/1     Running   30s
+nginx-deployment-7d9f8b7945-cd34e   1/1     Running   30s
+nginx-deployment-7d9f8b7945-ef56g   1/1     Running   30s
+<span class="cc"># Pod names are RANDOM!</span>
+</pre></div>
+  <div class="info-box green"><div class="box-title">That's it!</div><p>2 files, a few commands, done. No disks, no ordering, no special naming.</p></div>
+</div>
+
+<!-- SECTION 8 -->
+<div class="section" id="s8">
+  <div class="section-label">Section 08</div>
+  <h2>Deploying Stateful &mdash; Step by Step</h2>
+  <div class="section-divider"></div>
+  <p>Deploy MySQL. <strong>Stateful</strong> &mdash; data must survive restarts.</p>
+  <div class="warning"><strong>Why is this harder?</strong><p>Need: persistent storage, stable names, ordered startup, and a headless service. 4 extra things!</p></div>
+  <div class="step"><div class="step-num">1</div><div class="step-content"><strong>Create Headless Service</strong> (required by StatefulSet)</div></div>
+  <div class="code-block"><span class="file-label">mysql-headless-svc.yaml</span><div class="dots"><span class="d1"></span><span class="d2"></span><span class="d3"></span></div>
+<pre>
+<span class="ck">apiVersion:</span> <span class="cv">v1</span>
+<span class="ck">kind:</span> <span class="cv">Service</span>
+<span class="ck">metadata:</span>
+  <span class="ck">name:</span> <span class="cv">mysql-headless</span>
+<span class="ck">spec:</span>
+  <span class="ck">clusterIP:</span> <span class="cv">None</span>                    <span class="cc"># THIS makes it headless</span>
+  <span class="ck">selector:</span>  { <span class="ck">app:</span> <span class="cv">mysql</span> }
+  <span class="ck">ports:</span>
+  - <span class="ck">port:</span> <span class="cn">3306</span>
+</pre></div>
+  <div class="info-box blue"><div class="box-title">Headless = each pod gets its own DNS</div>
+  <p style="font-family:'JetBrains Mono',monospace;font-size:0.82em;color:var(--primary-light);margin-top:6px;">
+  mysql-0.mysql-headless.default.svc.cluster.local<br>
+  mysql-1.mysql-headless.default.svc.cluster.local<br>
+  mysql-2.mysql-headless.default.svc.cluster.local</p></div>
+  <div class="step"><div class="step-num">2</div><div class="step-content"><strong>Create the StatefulSet</strong></div></div>
+  <div class="code-block"><span class="file-label">mysql-statefulset.yaml</span><div class="dots"><span class="d1"></span><span class="d2"></span><span class="d3"></span></div>
+<pre>
+<span class="ck">apiVersion:</span> <span class="cv">apps/v1</span>
+<span class="ck">kind:</span> <span class="cv">StatefulSet</span>                  <span class="cc"># NOT Deployment!</span>
+<span class="ck">metadata:</span>
+  <span class="ck">name:</span> <span class="cv">mysql</span>
+<span class="ck">spec:</span>
+  <span class="ck">serviceName:</span> <span class="cv">mysql-headless</span>        <span class="cc"># REQUIRED</span>
+  <span class="ck">replicas:</span> <span class="cn">3</span>
+  <span class="ck">selector:</span>
+    <span class="ck">matchLabels:</span>  { <span class="ck">app:</span> <span class="cv">mysql</span> }
+  <span class="ck">template:</span>
+    <span class="ck">metadata:</span>
+      <span class="ck">labels:</span>  { <span class="ck">app:</span> <span class="cv">mysql</span> }
+    <span class="ck">spec:</span>
+      <span class="ck">containers:</span>
+      - <span class="ck">name:</span> <span class="cv">mysql</span>
+        <span class="ck">image:</span> <span class="cv">mysql:8.0</span>
+        <span class="ck">ports:</span>
+        - <span class="ck">containerPort:</span> <span class="cn">3306</span>
+        <span class="ck">env:</span>
+        - <span class="ck">name:</span> <span class="cv">MYSQL_ROOT_PASSWORD</span>
+          <span class="ck">value:</span> <span class="cs">"my-secret-password"</span>
+        <span class="ck">volumeMounts:</span>
+        - <span class="ck">name:</span> <span class="cv">mysql-data</span>
+          <span class="ck">mountPath:</span> <span class="cv">/var/lib/mysql</span>
+  <span class="cc"># KEY DIFFERENCE: auto-create disk per pod</span>
+  <span class="ck">volumeClaimTemplates:</span>
+  - <span class="ck">metadata:</span>
+      <span class="ck">name:</span> <span class="cv">mysql-data</span>
+    <span class="ck">spec:</span>
+      <span class="ck">accessModes:</span> [<span class="cs">"ReadWriteOnce"</span>]
+      <span class="ck">storageClassName:</span> <span class="cv">standard</span>
+      <span class="ck">resources:</span>
+        <span class="ck">requests:</span>
+          <span class="ck">storage:</span> <span class="cv">10Gi</span>
+</pre></div>
+  <div class="step"><div class="step-num">3</div><div class="step-content"><strong>Deploy &amp; watch ordered startup</strong></div></div>
+  <div class="code-block"><div class="dots"><span class="d1"></span><span class="d2"></span><span class="d3"></span></div>
+<pre>
+$ kubectl apply -f mysql-headless-svc.yaml
+$ kubectl apply -f mysql-statefulset.yaml
+$ kubectl get pods -w
+mysql-0   1/1   Running   45s    <span class="cc"># First</span>
+mysql-1   1/1   Running   30s    <span class="cc"># After mysql-0 ready</span>
+mysql-2   1/1   Running   15s    <span class="cc"># After mysql-1 ready</span>
+
+$ kubectl get pvc
+mysql-data-mysql-0    Bound    10Gi
+mysql-data-mysql-1    Bound    10Gi
+mysql-data-mysql-2    Bound    10Gi
+</pre></div>
+  <div class="info-box yellow"><div class="box-title">See the difference?</div><p>Stateless: 2 files, random names, no storage. Stateful: 2+ files, predictable names, storage, headless service, ordered startup.</p></div>
+</div>
+
+<!-- SECTION 9 -->
+<div class="section" id="s9">
+  <div class="section-label">Section 09</div>
+  <h2>Why Stateful is Harder &mdash; 5 Challenges</h2>
+  <div class="section-divider"></div>
+  <h3><span class="icon">&#128190;</span> 1. Persistent Storage</h3>
+  <p>Each pod needs its OWN disk surviving restarts. Need PV, PVC, StorageClass knowledge.</p>
+  <h3><span class="icon">&#128260;</span> 2. Ordered Operations</h3>
+  <p>Start in order (0,1,2), stop in reverse (2,1,0). Master must be ready before replicas.</p>
+  <h3><span class="icon">&#127760;</span> 3. Unique Network Identity</h3>
+  <p>Headless Service needed to talk to a SPECIFIC pod (e.g., the master).</p>
+  <h3><span class="icon">&#128190;</span> 4. Backup &amp; Recovery</h3>
+  <p>Stateless: no backups needed. Stateful: regular backups, disaster recovery, tested restores.</p>
+  <h3><span class="icon">&#128257;</span> 5. Data Replication</h3>
+  <p>Master-replica setup with init containers, sidecar scripts. StatefulSet doesn't do this for you.</p>
+  <div class="visual-diagram" style="padding:24px 30px;">
+    <div style="max-width:400px;margin:0 auto;position:relative;z-index:1;">
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:0.8em;color:var(--primary-light);min-width:90px;font-weight:600;">Stateless</span>
+        <div style="flex:1;height:22px;background:var(--bg-elevated);border-radius:11px;overflow:hidden;">
+          <div style="width:20%;height:100%;background:linear-gradient(90deg,var(--primary),var(--secondary));border-radius:11px;animation:barGrow1 1.5s ease both;"></div>
+        </div>
+        <span style="font-size:0.75em;color:var(--success);font-weight:700;">Easy</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:14px;">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:0.8em;color:var(--pink);min-width:90px;font-weight:600;">Stateful</span>
+        <div style="flex:1;height:22px;background:var(--bg-elevated);border-radius:11px;overflow:hidden;">
+          <div style="width:90%;height:100%;background:linear-gradient(90deg,var(--pink),var(--danger));border-radius:11px;animation:barGrow2 2s ease both;"></div>
+        </div>
+        <span style="font-size:0.75em;color:var(--danger-light);font-weight:700;">Complex</span>
+      </div>
+    </div>
+    <style>
+      @keyframes barGrow1 { from { width: 0; } to { width: 20%; } }
+      @keyframes barGrow2 { from { width: 0; } to { width: 90%; } }
+    </style>
+  </div>
+</div>
+
+<!-- SECTION 10 -->
+<div class="section" id="s10">
+  <div class="section-label">Section 10</div>
+  <h2>Persistent Volumes &mdash; Deep Dive</h2>
+  <div class="section-divider"></div>
+  <h3><span class="icon">&#129513;</span> 3 Pieces of the Storage Puzzle</h3>
+  <div class="visual-diagram" style="padding:28px 16px;">
+    <div class="vd-row" style="gap:12px;flex-wrap:wrap;">
+      <div class="vd-node" style="background:rgba(6,182,212,0.1);border:2px solid rgba(6,182,212,0.35);color:#06b6d4;flex-direction:column;padding:16px 18px;min-width:160px;animation-delay:0s;">
+        <span style="font-size:1.3em;">&#9881;</span>
+        <strong style="margin:4px 0 2px;">StorageClass</strong>
+        <span style="font-size:0.75em;opacity:0.7;">What TYPE of disk?<br>SSD? HDD? Cloud?</span>
+      </div>
+      <div style="color:var(--text-muted);font-size:1.5em;display:flex;align-items:center;">&#8594;</div>
+      <div class="vd-node" style="background:rgba(236,72,153,0.1);border:2px solid rgba(236,72,153,0.35);color:#ec4899;flex-direction:column;padding:16px 18px;min-width:160px;animation-delay:0.2s;">
+        <span style="font-size:1.3em;">&#128190;</span>
+        <strong style="margin:4px 0 2px;">PersistentVolume</strong>
+        <span style="font-size:0.75em;opacity:0.7;">The ACTUAL disk<br>10GB SSD on AWS</span>
+      </div>
+      <div style="color:var(--text-muted);font-size:1.5em;display:flex;align-items:center;">&#8592;</div>
+      <div class="vd-node" style="background:rgba(168,85,247,0.1);border:2px solid rgba(168,85,247,0.35);color:#a855f7;flex-direction:column;padding:16px 18px;min-width:160px;animation-delay:0.4s;">
+        <span style="font-size:1.3em;">&#128196;</span>
+        <strong style="margin:4px 0 2px;">PVC</strong>
+        <span style="font-size:0.75em;opacity:0.7;">"I need a disk!"<br>10GB, SSD, RWO</span>
+      </div>
+    </div>
+    <div class="vd-caption" style="margin-top:14px;">StorageClass <strong>defines how to create</strong> &rarr; PV <strong>&larr; matched/bound to</strong> PVC</div>
+  </div>
+  <h3><span class="icon">&#128196;</span> StorageClass Example</h3>
+  <div class="code-block"><span class="file-label">storageclass.yaml</span><div class="dots"><span class="d1"></span><span class="d2"></span><span class="d3"></span></div>
+<pre>
+<span class="ck">apiVersion:</span> <span class="cv">storage.k8s.io/v1</span>
+<span class="ck">kind:</span> <span class="cv">StorageClass</span>
+<span class="ck">metadata:</span>
+  <span class="ck">name:</span> <span class="cv">fast-ssd</span>
+<span class="ck">provisioner:</span> <span class="cv">kubernetes.io/aws-ebs</span>
+<span class="ck">parameters:</span>
+  <span class="ck">type:</span> <span class="cv">gp3</span>                          <span class="cc"># Fast SSD</span>
+<span class="ck">reclaimPolicy:</span> <span class="cv">Retain</span>               <span class="cc"># Keep disk if PVC deleted</span>
+</pre></div>
+  <h3><span class="icon">&#128274;</span> Access Modes</h3>
+  <div class="table-wrapper">
+  <table class="comparison-table">
+    <tr><th>Mode</th><th>Short</th><th>Meaning</th><th>Use Case</th></tr>
+    <tr><td>ReadWriteOnce</td><td>RWO</td><td>One pod reads/writes</td><td>Databases</td></tr>
+    <tr><td>ReadOnlyMany</td><td>ROX</td><td>Many pods read</td><td>Config files</td></tr>
+    <tr><td>ReadWriteMany</td><td>RWX</td><td>Many pods read/write</td><td>Shared NFS</td></tr>
+  </table></div>
+</div>
+
+<!-- SECTION 11 -->
+<div class="section" id="s11">
+  <div class="section-label">Section 11</div>
+  <h2>Headless Service &mdash; What &amp; Why</h2>
+  <div class="section-divider"></div>
+  <div class="two-col">
+    <div class="col-card blue-border">
+      <h4>Normal Service</h4>
+      <p>Single IP. Random pod selection.</p>
+      <div style="display:flex;align-items:center;gap:8px;justify-content:center;margin:14px 0;flex-wrap:wrap;">
+        <span style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.3);padding:6px 12px;border-radius:8px;font-size:0.8em;color:var(--primary-light);font-weight:600;">&#128100; Client</span>
+        <span style="color:var(--text-muted);">&rarr;</span>
+        <span style="background:rgba(6,182,212,0.12);border:1px solid rgba(6,182,212,0.3);padding:6px 12px;border-radius:8px;font-size:0.8em;color:var(--secondary);font-weight:600;">&#9878; Service IP</span>
+        <span style="color:var(--text-muted);">&rarr;</span>
+        <span style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.3);padding:6px 12px;border-radius:8px;font-size:0.8em;color:var(--accent);font-weight:600;">&#127922; Random Pod</span>
+      </div>
+      <p><strong>Good for:</strong> Stateless</p>
+    </div>
+    <div class="col-card pink-border">
+      <h4>Headless Service</h4>
+      <p>No IP. Each pod has own DNS name.</p>
+      <div style="display:flex;flex-direction:column;gap:6px;margin:14px 0;">
+        <div style="display:flex;align-items:center;gap:6px;justify-content:center;flex-wrap:wrap;">
+          <span style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.3);padding:5px 10px;border-radius:7px;font-size:0.75em;color:var(--primary-light);font-weight:600;">Client</span>
+          <span style="color:var(--text-muted);font-size:0.9em;">&rarr;</span>
+          <span style="background:rgba(168,85,247,0.12);border:1px solid rgba(168,85,247,0.3);padding:5px 10px;border-radius:7px;font-size:0.75em;color:var(--purple);font-weight:600;">mysql-0.svc</span>
+          <span style="color:var(--text-muted);font-size:0.9em;">&rarr;</span>
+          <span style="background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.3);padding:5px 10px;border-radius:7px;font-size:0.75em;color:var(--success);font-weight:600;">&#9733; Master</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;justify-content:center;flex-wrap:wrap;">
+          <span style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.3);padding:5px 10px;border-radius:7px;font-size:0.75em;color:var(--primary-light);font-weight:600;">Client</span>
+          <span style="color:var(--text-muted);font-size:0.9em;">&rarr;</span>
+          <span style="background:rgba(168,85,247,0.12);border:1px solid rgba(168,85,247,0.3);padding:5px 10px;border-radius:7px;font-size:0.75em;color:var(--purple);font-weight:600;">mysql-1.svc</span>
+          <span style="color:var(--text-muted);font-size:0.9em;">&rarr;</span>
+          <span style="background:rgba(236,72,153,0.12);border:1px solid rgba(236,72,153,0.3);padding:5px 10px;border-radius:7px;font-size:0.75em;color:var(--pink);font-weight:600;">Replica</span>
+        </div>
+      </div>
+      <p><strong>Good for:</strong> Stateful</p>
+    </div>
+  </div>
+  <div class="info-box blue"><div class="box-title">Why?</div><p>Databases write to <strong>master</strong> (pod-0), read from <strong>replicas</strong>. Must target specific pods. Headless Service makes this possible.</p></div>
+</div>
+
+<!-- SECTION 12 -->
+<div class="section" id="s12">
+  <div class="section-label">Section 12</div>
+  <h2>Complete Example: Stateless Nginx</h2>
+  <div class="section-divider"></div>
+  <div class="code-block"><span class="file-label">complete-nginx.yaml</span><div class="dots"><span class="d1"></span><span class="d2"></span><span class="d3"></span></div>
+<pre>
+---
+<span class="ck">apiVersion:</span> <span class="cv">apps/v1</span>
+<span class="ck">kind:</span> <span class="cv">Deployment</span>
+<span class="ck">metadata:</span>
+  <span class="ck">name:</span> <span class="cv">nginx-web</span>
+<span class="ck">spec:</span>
+  <span class="ck">replicas:</span> <span class="cn">3</span>
+  <span class="ck">strategy:</span>
+    <span class="ck">type:</span> <span class="cv">RollingUpdate</span>
+    <span class="ck">rollingUpdate:</span> { <span class="ck">maxUnavailable:</span> <span class="cn">1</span>, <span class="ck">maxSurge:</span> <span class="cn">1</span> }
+  <span class="ck">selector:</span>
+    <span class="ck">matchLabels:</span>  { <span class="ck">app:</span> <span class="cv">nginx-web</span> }
+  <span class="ck">template:</span>
+    <span class="ck">metadata:</span>
+      <span class="ck">labels:</span>  { <span class="ck">app:</span> <span class="cv">nginx-web</span> }
+    <span class="ck">spec:</span>
+      <span class="ck">containers:</span>
+      - <span class="ck">name:</span> <span class="cv">nginx</span>
+        <span class="ck">image:</span> <span class="cv">nginx:1.25-alpine</span>
+        <span class="ck">ports:</span>
+        - <span class="ck">containerPort:</span> <span class="cn">80</span>
+        <span class="ck">resources:</span>
+          <span class="ck">requests:</span> { <span class="ck">cpu:</span> <span class="cs">"100m"</span>, <span class="ck">memory:</span> <span class="cs">"64Mi"</span> }
+          <span class="ck">limits:</span>   { <span class="ck">cpu:</span> <span class="cs">"250m"</span>, <span class="ck">memory:</span> <span class="cs">"128Mi"</span> }
+        <span class="ck">readinessProbe:</span>
+          <span class="ck">httpGet:</span> { <span class="ck">path:</span> <span class="cv">/</span>, <span class="ck">port:</span> <span class="cn">80</span> }
+        <span class="ck">livenessProbe:</span>
+          <span class="ck">httpGet:</span> { <span class="ck">path:</span> <span class="cv">/</span>, <span class="ck">port:</span> <span class="cn">80</span> }
+---
+<span class="ck">apiVersion:</span> <span class="cv">v1</span>
+<span class="ck">kind:</span> <span class="cv">Service</span>
+<span class="ck">metadata:</span>
+  <span class="ck">name:</span> <span class="cv">nginx-web-svc</span>
+<span class="ck">spec:</span>
+  <span class="ck">type:</span> <span class="cv">LoadBalancer</span>
+  <span class="ck">selector:</span>  { <span class="ck">app:</span> <span class="cv">nginx-web</span> }
+  <span class="ck">ports:</span>
+  - <span class="ck">port:</span> <span class="cn">80</span>
+    <span class="ck">targetPort:</span> <span class="cn">80</span>
+</pre></div>
+</div>
+
+<!-- SECTION 13 -->
+<div class="section" id="s13">
+  <div class="section-label">Section 13</div>
+  <h2>Complete Example: Stateful MySQL</h2>
+  <div class="section-divider"></div>
+  <div class="code-block"><span class="file-label">complete-mysql.yaml</span><div class="dots"><span class="d1"></span><span class="d2"></span><span class="d3"></span></div>
+<pre>
+<span class="cc"># Secret + Headless Service + StatefulSet</span>
+---
+<span class="ck">apiVersion:</span> <span class="cv">v1</span>
+<span class="ck">kind:</span> <span class="cv">Secret</span>
+<span class="ck">metadata:</span>  { <span class="ck">name:</span> <span class="cv">mysql-secret</span> }
+<span class="ck">type:</span> <span class="cv">Opaque</span>
+<span class="ck">data:</span>
+  <span class="ck">root-password:</span> <span class="cv">bXktc2VjcmV0LXBhc3M=</span>
+---
+<span class="ck">apiVersion:</span> <span class="cv">v1</span>
+<span class="ck">kind:</span> <span class="cv">Service</span>
+<span class="ck">metadata:</span>  { <span class="ck">name:</span> <span class="cv">mysql-headless</span> }
+<span class="ck">spec:</span>
+  <span class="ck">clusterIP:</span> <span class="cv">None</span>
+  <span class="ck">selector:</span>  { <span class="ck">app:</span> <span class="cv">mysql</span> }
+  <span class="ck">ports:</span>  [{ <span class="ck">port:</span> <span class="cn">3306</span> }]
+---
+<span class="ck">apiVersion:</span> <span class="cv">apps/v1</span>
+<span class="ck">kind:</span> <span class="cv">StatefulSet</span>
+<span class="ck">metadata:</span>  { <span class="ck">name:</span> <span class="cv">mysql</span> }
+<span class="ck">spec:</span>
+  <span class="ck">serviceName:</span> <span class="cv">mysql-headless</span>
+  <span class="ck">replicas:</span> <span class="cn">3</span>
+  <span class="ck">selector:</span>
+    <span class="ck">matchLabels:</span>  { <span class="ck">app:</span> <span class="cv">mysql</span> }
+  <span class="ck">template:</span>
+    <span class="ck">metadata:</span>
+      <span class="ck">labels:</span>  { <span class="ck">app:</span> <span class="cv">mysql</span> }
+    <span class="ck">spec:</span>
+      <span class="ck">terminationGracePeriodSeconds:</span> <span class="cn">30</span>
+      <span class="ck">containers:</span>
+      - <span class="ck">name:</span> <span class="cv">mysql</span>
+        <span class="ck">image:</span> <span class="cv">mysql:8.0</span>
+        <span class="ck">ports:</span>  [{ <span class="ck">containerPort:</span> <span class="cn">3306</span> }]
+        <span class="ck">env:</span>
+        - <span class="ck">name:</span> <span class="cv">MYSQL_ROOT_PASSWORD</span>
+          <span class="ck">valueFrom:</span>
+            <span class="ck">secretKeyRef:</span>
+              <span class="ck">name:</span> <span class="cv">mysql-secret</span>
+              <span class="ck">key:</span> <span class="cv">root-password</span>
+        <span class="ck">resources:</span>
+          <span class="ck">requests:</span> { <span class="ck">cpu:</span> <span class="cs">"500m"</span>,  <span class="ck">memory:</span> <span class="cs">"512Mi"</span> }
+          <span class="ck">limits:</span>   { <span class="ck">cpu:</span> <span class="cs">"1000m"</span>, <span class="ck">memory:</span> <span class="cs">"1Gi"</span>   }
+        <span class="ck">volumeMounts:</span>
+        - <span class="ck">name:</span> <span class="cv">mysql-data</span>
+          <span class="ck">mountPath:</span> <span class="cv">/var/lib/mysql</span>
+        <span class="ck">readinessProbe:</span>
+          <span class="ck">exec:</span>
+            <span class="ck">command:</span> [<span class="cs">"mysqladmin"</span>,<span class="cs">"ping"</span>,<span class="cs">"-h"</span>,<span class="cs">"127.0.0.1"</span>]
+          <span class="ck">initialDelaySeconds:</span> <span class="cn">30</span>
+  <span class="ck">volumeClaimTemplates:</span>
+  - <span class="ck">metadata:</span>  { <span class="ck">name:</span> <span class="cv">mysql-data</span> }
+    <span class="ck">spec:</span>
+      <span class="ck">accessModes:</span> [<span class="cs">"ReadWriteOnce"</span>]
+      <span class="ck">storageClassName:</span> <span class="cv">standard</span>
+      <span class="ck">resources:</span>
+        <span class="ck">requests:</span>  { <span class="ck">storage:</span> <span class="cv">10Gi</span> }
+</pre></div>
+</div>
+
+<!-- SECTION 14 -->
+<div class="section" id="s14">
+  <div class="section-label">Section 14</div>
+  <h2>How Scaling Works Differently</h2>
+  <div class="section-divider"></div>
+  <div class="two-col">
+    <div class="col-card blue-border">
+      <h4>Stateless Scaling</h4>
+      <div class="code-block" style="font-size:0.78em;margin:8px 0;">
+<pre>
+<span class="cc"># Scale up (instant, parallel)</span>
+$ kubectl scale deployment nginx \
+    --replicas=10
+
+<span class="cc"># Scale down (any order)</span>
+$ kubectl scale deployment nginx \
+    --replicas=2
+</pre></div>
+    </div>
+    <div class="col-card pink-border">
+      <h4>Stateful Scaling</h4>
+      <div class="code-block" style="font-size:0.78em;margin:8px 0;">
+<pre>
+<span class="cc"># Scale up (ONE by ONE)</span>
+$ kubectl scale statefulset mysql \
+    --replicas=5
+
+<span class="cc"># Scale down (REVERSE order)</span>
+$ kubectl scale statefulset mysql \
+    --replicas=2
+<span class="cc"># PVCs NOT deleted!</span>
+</pre></div>
+    </div>
+  </div>
+  <div class="info-box yellow"><div class="box-title">Key Difference</div><p><strong>Stateless:</strong> Pods gone, no data loss. <strong>Stateful:</strong> Pods gone but PVCs kept. Scale back up = data returns. (You still pay for disks!)</p></div>
+</div>
+
+<!-- SECTION 15 -->
+<div class="section" id="s15">
+  <div class="section-label">Section 15</div>
+  <h2>When to Use Which?</h2>
+  <div class="section-divider"></div>
+  <div class="two-col">
+    <div class="col-card blue-border">
+      <h4>Use Deployment (Stateless)</h4>
+      <ul class="checklist">
+        <li>App doesn't save data locally</li>
+        <li>All pods are identical</li>
+        <li>Losing a pod is no problem</li>
+        <li>Easy, fast scaling needed</li>
+        <li>Data lives in external DB</li>
+      </ul>
+    </div>
+    <div class="col-card pink-border">
+      <h4>Use StatefulSet (Stateful)</h4>
+      <ul class="checklist">
+        <li>Each pod needs own storage</li>
+        <li>Stable DNS names needed</li>
+        <li>Database or message broker</li>
+        <li>Ordered startup/shutdown</li>
+        <li>Master-replica topology</li>
+      </ul>
+    </div>
+  </div>
+  <div class="info-box green"><div class="box-title">Pro Tip</div><p>Most apps are deployed <strong>stateless</strong>, connecting to <strong>managed database services</strong> (AWS RDS, Cloud SQL). This avoids StatefulSet complexity entirely!</p></div>
+</div>
+
+<!-- SECTION 16 -->
+<div class="section" id="s16">
+  <div class="section-label">Section 16</div>
+  <h2>Common Beginner Mistakes</h2>
+  <div class="section-divider"></div>
+  <div class="warning"><strong>Mistake 1: Deployment for a database</strong><p>Pod restart = ALL DATA GONE. Use StatefulSet.</p></div>
+  <div class="warning"><strong>Mistake 2: Forgetting Headless Service</strong><p>StatefulSet requires it. No headless = no stable DNS.</p></div>
+  <div class="warning"><strong>Mistake 3: No resource limits</strong><p>One pod eats all resources, crashes everything.</p></div>
+  <div class="warning"><strong>Mistake 4: Passwords in plain YAML</strong><p>Use Kubernetes Secrets. Never commit passwords.</p></div>
+  <div class="warning"><strong>Mistake 5: Expecting auto-replication</strong><p>StatefulSet manages pods/storage/names only. Replication = your job.</p></div>
+  <div class="warning"><strong>Mistake 6: Deleting PVCs accidentally</strong><p>PVCs survive StatefulSet deletion (safety). Manual delete = data gone forever.</p></div>
+</div>
+
+<!-- SECTION 17 -->
+<div class="section" id="s17">
+  <div class="section-label">Section 17</div>
+  <h2>Cheat Sheet &amp; Quick Reference</h2>
+  <div class="section-divider"></div>
+  <h3><span class="icon">&#9889;</span> kubectl Commands</h3>
+  <div class="code-block"><div class="dots"><span class="d1"></span><span class="d2"></span><span class="d3"></span></div>
+<pre>
+<span class="cc"># ===== STATELESS =====</span>
+kubectl create deployment nginx --image=nginx
+kubectl get deployments
+kubectl scale deployment nginx --replicas=5
+kubectl rollout status deployment/nginx
+kubectl rollout undo deployment/nginx
+
+<span class="cc"># ===== STATEFUL =====</span>
+kubectl get statefulsets
+kubectl get pvc
+kubectl scale statefulset mysql --replicas=5
+kubectl delete statefulset mysql      <span class="cc"># PVCs remain!</span>
+
+<span class="cc"># ===== GENERAL =====</span>
+kubectl get pods -w                   <span class="cc"># Watch live</span>
+kubectl describe pod mysql-0
+kubectl logs mysql-0
+kubectl exec -it mysql-0 -- bash
+kubectl get all
+</pre></div>
+  <h3><span class="icon">&#128736;</span> Decision Flowchart</h3>
+  <div class="visual-diagram" style="padding:30px 16px;">
+    <!-- Question 1 -->
+    <div class="vd-row">
+      <div class="vd-node" style="background:rgba(99,102,241,0.12);border:2px solid rgba(99,102,241,0.4);color:var(--primary-light);padding:14px 22px;font-family:'Inter',sans-serif;font-weight:700;">Does your app SAVE DATA locally?</div>
+    </div>
+    <div class="vd-connector" style="margin:4px 0;"><div class="vd-arrow" style="height:20px;"></div></div>
+    <!-- Branches -->
+    <div class="vd-row" style="gap:40px;">
+      <!-- NO branch -->
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+        <div style="background:rgba(16,185,129,0.15);border:2px solid rgba(16,185,129,0.4);color:var(--success);padding:6px 20px;border-radius:99px;font-weight:700;font-size:0.88em;">NO</div>
+        <div class="vd-flow-arrow" style="height:16px;"></div>
+        <div style="background:linear-gradient(135deg,var(--primary),var(--secondary));color:white;padding:12px 22px;border-radius:10px;font-weight:700;font-size:0.88em;box-shadow:0 4px 16px rgba(99,102,241,0.3);text-align:center;">&#128640; DEPLOYMENT<br><span style="font-size:0.8em;opacity:0.85;font-weight:500;">Stateless</span></div>
+      </div>
+      <!-- YES branch -->
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+        <div style="background:rgba(245,158,11,0.15);border:2px solid rgba(245,158,11,0.4);color:var(--accent);padding:6px 20px;border-radius:99px;font-weight:700;font-size:0.88em;">YES</div>
+        <div class="vd-flow-arrow" style="height:16px;"></div>
+        <div class="vd-node" style="background:rgba(168,85,247,0.1);border:2px solid rgba(168,85,247,0.35);color:var(--purple);padding:10px 16px;font-family:'Inter',sans-serif;font-weight:600;font-size:0.82em;">Needs unique names<br>or stable DNS?</div>
+        <div class="vd-flow-arrow" style="height:12px;"></div>
+        <div style="display:flex;gap:20px;">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:5px;">
+            <span style="background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3);color:var(--success);padding:3px 14px;border-radius:99px;font-weight:700;font-size:0.78em;">NO</span>
+            <div style="background:linear-gradient(135deg,var(--primary),var(--secondary));color:white;padding:10px 16px;border-radius:8px;font-weight:700;font-size:0.78em;box-shadow:0 4px 12px rgba(99,102,241,0.2);text-align:center;">&#128640; Deployment</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:5px;">
+            <span style="background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);color:var(--accent);padding:3px 14px;border-radius:99px;font-weight:700;font-size:0.78em;">YES</span>
+            <div style="background:linear-gradient(135deg,var(--pink),var(--danger));color:white;padding:10px 16px;border-radius:8px;font-weight:700;font-size:0.78em;box-shadow:0 4px 12px rgba(236,72,153,0.3);text-align:center;">&#128274; StatefulSet</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="info-box green" style="margin-top:28px;"><div class="box-title">You Made It!</div><p><strong>Stateless = simple, replaceable. Stateful = complex, data-safe.</strong> Start with stateless. When comfortable, explore stateful. Practice with Minikube or Kind!</p></div>
+</div>
+
+</div><!-- /container -->
+</div><!-- /main-content -->
+
+<footer class="main-content">
+  <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:14px;">
+    <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--primary),var(--purple));display:flex;align-items:center;justify-content:center;box-shadow:0 0 16px rgba(99,102,241,0.3);">
+      <span style="color:white;font-weight:900;font-size:0.9em;">SV</span>
+    </div>
+    <div style="text-align:left;">
+      <div style="font-weight:700;color:var(--text);font-size:0.92em;">Sim Vattanac</div>
+      <a href="mailto:vattanacsim99@gmail.com" style="color:var(--primary-light);text-decoration:none;font-size:0.8em;font-weight:500;transition:color 0.2s;">vattanacsim99@gmail.com</a>
+    </div>
+  </div>
+  <div style="width:40px;height:1px;background:var(--border);margin:0 auto 14px;"></div>
+  <p>&copy; 2026 Sim Vattanac. All rights reserved.<br>
+  <span style="opacity:0.5;font-size:0.88em;">Kubernetes Stateless vs Stateful &mdash; Complete Beginner Guide</span></p>
+</footer>
+
+<!-- ======== JAVASCRIPT ======== -->
+<script>
+(function() {
+  const sections = document.querySelectorAll('.section[id]');
+  const sidebarLinks = document.querySelectorAll('.sidebar-link[data-section]');
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+  const toggle = document.getElementById('sidebarToggle');
+
+  // ---- Scroll spy: highlight active section in sidebar ----
+  function updateActiveLink() {
+    let current = '';
+    const scrollY = window.scrollY + 100;
+
+    sections.forEach(sec => {
+      if (sec.offsetTop <= scrollY) {
+        current = sec.id;
+      }
+    });
+
+    sidebarLinks.forEach(link => {
+      link.classList.toggle('active', link.dataset.section === current);
+    });
+
+    // Progress
+    const winScroll = document.documentElement.scrollTop;
+    const height = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+    const pct = Math.round((winScroll / height) * 100);
+    document.getElementById('progressBar').style.width = pct + '%';
+    document.getElementById('sidebarProgressFill').style.width = pct + '%';
+    document.getElementById('progressPercent').textContent = pct + '%';
+
+    // Scroll-to-top
+    document.getElementById('scrollTop').classList.toggle('show', winScroll > 400);
+  }
+
+  window.addEventListener('scroll', updateActiveLink, { passive: true });
+  updateActiveLink();
+
+  // ---- Smooth scroll sidebar links ----
+  sidebarLinks.forEach(link => {
+    link.addEventListener('click', function(e) {
+      // Close mobile sidebar
+      if (window.innerWidth <= 1024) {
+        sidebar.classList.remove('open');
+        overlay.classList.remove('open');
+      }
+    });
+  });
+
+  // ---- Mobile toggle ----
+  toggle.addEventListener('click', function() {
+    sidebar.classList.toggle('open');
+    overlay.classList.toggle('open');
+  });
+  overlay.addEventListener('click', function() {
+    sidebar.classList.remove('open');
+    overlay.classList.remove('open');
+  });
+
+  // ---- Animate sections on scroll ----
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.style.opacity = '1';
+        entry.target.style.transform = 'translateY(0)';
+      }
+    });
+  }, { threshold: 0.04 });
+
+  sections.forEach(el => {
+    el.style.opacity = '0';
+    el.style.transform = 'translateY(24px)';
+    el.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+    observer.observe(el);
+  });
+})();
+</script>
+
+</body>
+</html>
