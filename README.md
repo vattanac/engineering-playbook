@@ -46,6 +46,7 @@ This playbook is intended to:
 | Topic | Link |
 |-------|------|
 | Kubernetes Stateless & Stateful | [kubernete-stateless-statful](https://kubernete-stateless-statful.netlify.app/) |
+| ArgoCD Guide | [argocd-guide-doc](https://argocd-guide-doc.netlify.app/) |
 
 ---
 
