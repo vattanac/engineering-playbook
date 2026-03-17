@@ -1,0 +1,2103 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RKE2 Deep Dive Guide — From Zero to Hero</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ═══════════════════ DESIGN TOKENS ═══════════════════ */
+  :root {
+    --bg: #09090b;
+    --bg-elevated: #18181b;
+    --bg-card: rgba(24, 24, 27, 0.6);
+    --bg-glass: rgba(255, 255, 255, 0.03);
+    --border: rgba(255, 255, 255, 0.06);
+    --border-hover: rgba(255, 255, 255, 0.12);
+    --text: #fafafa;
+    --text-secondary: #c8c8d0;
+    --text-muted: #9898a4;
+    --accent: #6366f1;
+    --accent-2: #8b5cf6;
+    --accent-3: #a78bfa;
+    --cyan: #22d3ee;
+    --green: #34d399;
+    --amber: #fbbf24;
+    --rose: #fb7185;
+    --blue: #60a5fa;
+    --glow-accent: rgba(99, 102, 241, 0.15);
+    --glow-cyan: rgba(34, 211, 238, 0.1);
+    --radius: 16px;
+    --radius-sm: 10px;
+    --radius-xs: 6px;
+    --font: 'Inter', system-ui, -apple-system, sans-serif;
+    --mono: 'JetBrains Mono', 'Fira Code', monospace;
+  }
+
+  /* ═══════════════════ RESET & BASE ═══════════════════ */
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  ::selection { background: var(--accent); color: #fff; }
+  a { color: var(--cyan); text-decoration: none; transition: color 0.2s; }
+  a:hover { color: var(--accent-3); }
+
+  /* ═══════════════════ AMBIENT BACKGROUND ═══════════════════ */
+  .ambient {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 0;
+    overflow: hidden;
+  }
+  .ambient .orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(120px);
+    opacity: 0.4;
+    animation: orbFloat 20s ease-in-out infinite alternate;
+  }
+  .ambient .orb-1 { width: 600px; height: 600px; background: var(--accent); top: -200px; left: -100px; }
+  .ambient .orb-2 { width: 500px; height: 500px; background: var(--cyan); bottom: -200px; right: -100px; animation-delay: -7s; }
+  .ambient .orb-3 { width: 400px; height: 400px; background: var(--accent-2); top: 50%; left: 50%; transform: translate(-50%,-50%); animation-delay: -14s; }
+
+  @keyframes orbFloat {
+    0% { transform: translate(0, 0) scale(1); }
+    33% { transform: translate(30px, -40px) scale(1.05); }
+    66% { transform: translate(-20px, 30px) scale(0.95); }
+    100% { transform: translate(10px, -10px) scale(1.02); }
+  }
+
+  /* ═══════════════════ LAYOUT ═══════════════════ */
+  .wrapper { position: relative; z-index: 1; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+
+  /* ═══════════════════ STICKY NAV ═══════════════════ */
+  .topnav {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(9, 9, 11, 0.7);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .topnav .logo {
+    font-weight: 800;
+    font-size: 1rem;
+    letter-spacing: -0.02em;
+    background: linear-gradient(135deg, var(--accent-3), var(--cyan));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .topnav .nav-links { display: flex; gap: 24px; }
+  .topnav .nav-links a {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    font-weight: 500;
+    transition: color 0.2s;
+  }
+  .topnav .nav-links a:hover { color: var(--text); }
+  .topnav .pill {
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: #fff;
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+
+  /* ═══════════════════ HERO ═══════════════════ */
+  .hero {
+    padding: 100px 24px 80px;
+    text-align: center;
+    position: relative;
+  }
+  .hero-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg-glass);
+    border: 1px solid var(--border);
+    padding: 8px 18px;
+    border-radius: 40px;
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    margin-bottom: 28px;
+    backdrop-filter: blur(10px);
+  }
+  .hero-eyebrow .dot {
+    width: 8px; height: 8px;
+    background: var(--green);
+    border-radius: 50%;
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(1.3); }
+  }
+  .hero h1 {
+    font-size: clamp(2.5rem, 6vw, 4.5rem);
+    font-weight: 900;
+    letter-spacing: -0.04em;
+    line-height: 1.1;
+    margin-bottom: 20px;
+    background: linear-gradient(180deg, #fff 0%, rgba(255,255,255,0.6) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .hero .subtitle {
+    font-size: 1.15rem;
+    color: var(--text-secondary);
+    max-width: 640px;
+    margin: 0 auto 32px;
+    line-height: 1.7;
+    font-weight: 400;
+  }
+  .hero-cta {
+    display: inline-flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 28px;
+    border-radius: 12px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    border: none;
+    cursor: pointer;
+    transition: all 0.25s ease;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: #fff;
+    box-shadow: 0 0 24px var(--glow-accent);
+  }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 0 40px var(--glow-accent); color:#fff; }
+  .btn-outline {
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+  }
+  .btn-outline:hover { border-color: var(--border-hover); color: var(--text); background: var(--bg-glass); }
+
+  /* ═══════════════════ TABLE OF CONTENTS ═══════════════════ */
+  .toc-section { padding: 0 24px 60px; }
+  .toc-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 10px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  .toc-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 18px;
+    background: var(--bg-glass);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    font-weight: 500;
+    transition: all 0.25s ease;
+    text-decoration: none;
+  }
+  .toc-item:hover {
+    background: rgba(99, 102, 241, 0.06);
+    border-color: rgba(99, 102, 241, 0.2);
+    color: var(--text);
+    transform: translateY(-1px);
+  }
+  .toc-num {
+    min-width: 28px; height: 28px;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(99, 102, 241, 0.1);
+    color: var(--accent-3);
+    border-radius: 8px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  /* ═══════════════════ SECTIONS ═══════════════════ */
+  section { padding: 40px 0 60px; }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 32px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .section-number {
+    min-width: 44px; height: 44px;
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: #fff;
+    border-radius: 12px;
+    font-weight: 800;
+    font-size: 1rem;
+    flex-shrink: 0;
+  }
+  .section-header h2 {
+    font-size: 1.6rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    color: var(--text);
+  }
+
+  h3 {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--text);
+    margin: 36px 0 16px;
+    letter-spacing: -0.02em;
+  }
+  h4 { font-size: 1rem; font-weight: 600; color: var(--text); margin: 20px 0 8px; }
+  p { margin-bottom: 14px; color: var(--text-secondary); }
+
+  /* ═══════════════════ GLASS CARD ═══════════════════ */
+  .glass {
+    background: var(--bg-card);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px;
+    transition: all 0.3s ease;
+  }
+  .glass:hover {
+    border-color: var(--border-hover);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+  }
+
+  /* ═══════════════════ BENTO GRID ═══════════════════ */
+  .bento { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin: 20px 0; }
+  .bento-card {
+    background: var(--bg-card);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+  }
+  .bento-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .bento-card:hover { border-color: var(--border-hover); transform: translateY(-2px); box-shadow: 0 12px 40px rgba(0,0,0,0.3); }
+  .bento-card:hover::before { opacity: 1; }
+  .bento-icon {
+    width: 44px; height: 44px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 12px;
+    font-size: 1.4rem;
+    margin-bottom: 16px;
+  }
+  .bento-icon.blue { background: rgba(96, 165, 250, 0.1); }
+  .bento-icon.purple { background: rgba(167, 139, 250, 0.1); }
+  .bento-icon.green { background: rgba(52, 211, 153, 0.1); }
+  .bento-icon.amber { background: rgba(251, 191, 36, 0.1); }
+  .bento-icon.cyan { background: rgba(34, 211, 238, 0.1); }
+  .bento-icon.rose { background: rgba(251, 113, 133, 0.1); }
+  .bento-card h4 { margin: 0 0 8px; font-size: 0.95rem; color: var(--text); }
+  .bento-card p { font-size: 0.88rem; margin: 0; color: var(--text-secondary); line-height: 1.6; }
+
+  /* ═══════════════════ CALLOUT BOXES ═══════════════════ */
+  .callout {
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    margin: 20px 0;
+    border: 1px solid;
+    display: flex;
+    gap: 14px;
+  }
+  .callout-icon { font-size: 1.2rem; flex-shrink: 0; margin-top: 2px; }
+  .callout-body { flex: 1; }
+  .callout-title { font-weight: 700; font-size: 0.9rem; margin-bottom: 4px; }
+  .callout p { margin: 0; font-size: 0.9rem; }
+
+  .callout-info { background: rgba(99, 102, 241, 0.06); border-color: rgba(99, 102, 241, 0.15); }
+  .callout-info .callout-title { color: var(--accent-3); }
+  .callout-warn { background: rgba(251, 191, 36, 0.06); border-color: rgba(251, 191, 36, 0.15); }
+  .callout-warn .callout-title { color: var(--amber); }
+  .callout-success { background: rgba(52, 211, 153, 0.06); border-color: rgba(52, 211, 153, 0.15); }
+  .callout-success .callout-title { color: var(--green); }
+  .callout-danger { background: rgba(251, 113, 133, 0.06); border-color: rgba(251, 113, 133, 0.15); }
+  .callout-danger .callout-title { color: var(--rose); }
+
+  /* ═══════════════════ ANALOGY BOX ═══════════════════ */
+  .analogy {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.06), rgba(99, 102, 241, 0.04));
+    border: 1px solid rgba(139, 92, 246, 0.15);
+    border-radius: var(--radius);
+    padding: 24px;
+    margin: 20px 0;
+  }
+  .analogy-label {
+    font-weight: 700;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--accent-3);
+    margin-bottom: 10px;
+  }
+  .analogy p { color: var(--text-secondary); margin: 0; }
+
+  /* ═══════════════════ CODE BLOCKS ═══════════════════ */
+  .code-block {
+    position: relative;
+    margin: 16px 0;
+  }
+  pre {
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    padding-top: 20px;
+    overflow-x: auto;
+    margin: 0;
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    line-height: 1.7;
+    position: relative;
+  }
+  .copy-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: var(--text-muted);
+    padding: 5px 12px;
+    border-radius: 8px;
+    font-family: var(--font);
+    font-size: 0.72rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+  .copy-btn:hover {
+    background: rgba(255,255,255,0.1);
+    border-color: rgba(255,255,255,0.2);
+    color: var(--text);
+  }
+  .copy-btn.copied {
+    background: rgba(52,211,153,0.15);
+    border-color: rgba(52,211,153,0.3);
+    color: #34d399;
+  }
+  .copy-btn svg { width: 14px; height: 14px; }
+  pre .comment { color: #525263; }
+  pre .cmd { color: var(--cyan); }
+  pre .flag { color: var(--accent-3); }
+  pre .string { color: var(--green); }
+  pre .output { color: var(--text-muted); font-style: italic; }
+
+  .inline-code {
+    background: rgba(99, 102, 241, 0.1);
+    border: 1px solid rgba(99, 102, 241, 0.15);
+    padding: 2px 8px;
+    border-radius: var(--radius-xs);
+    font-family: var(--mono);
+    font-size: 0.84em;
+    color: var(--accent-3);
+  }
+
+  /* ═══════════════════ DIAGRAMS ═══════════════════ */
+  .diagram {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 32px;
+    margin: 20px 0;
+    overflow-x: auto;
+    text-align: center;
+  }
+  .diagram pre {
+    background: transparent;
+    border: none;
+    display: inline-block;
+    text-align: left;
+    font-size: 0.78rem;
+    line-height: 1.4;
+    padding: 0;
+    margin: 0;
+    color: var(--text-secondary);
+  }
+  .diagram-caption {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: 16px;
+    font-style: italic;
+  }
+
+  /* ═══════════════════ TABLES ═══════════════════ */
+  .table-wrap {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin: 20px 0;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+  th {
+    background: rgba(99, 102, 241, 0.08);
+    color: var(--text);
+    padding: 14px 20px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--border);
+  }
+  td {
+    padding: 12px 20px;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border);
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255, 255, 255, 0.02); }
+
+  /* ═══════════════════ STEP CARDS ═══════════════════ */
+  .step-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px;
+    margin: 16px 0;
+    backdrop-filter: blur(12px);
+  }
+  .step-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: #fff;
+    padding: 5px 16px;
+    border-radius: 20px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    margin-bottom: 14px;
+  }
+
+  /* ═══════════════════ FLOW PIPELINE ═══════════════════ */
+  .flow {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin: 24px 0;
+    padding: 24px;
+    background: var(--bg-glass);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .flow-item {
+    background: linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.1));
+    border: 1px solid rgba(99,102,241,0.2);
+    color: var(--text);
+    padding: 12px 20px;
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+    font-size: 0.82rem;
+    text-align: center;
+    min-width: 110px;
+  }
+  .flow-item small { display: block; color: var(--text-muted); font-weight: 400; font-size: 0.75rem; margin-top: 2px; }
+  .flow-arrow { color: var(--accent-3); margin: 0 8px; font-size: 1.2rem; }
+
+  /* ═══════════════════ TIMELINE ═══════════════════ */
+  .timeline { position: relative; padding-left: 36px; margin: 24px 0; }
+  .timeline::before {
+    content: '';
+    position: absolute;
+    left: 11px; top: 8px; bottom: 8px;
+    width: 2px;
+    background: linear-gradient(180deg, var(--accent), var(--accent-2), var(--cyan));
+    border-radius: 2px;
+  }
+  .timeline-item { position: relative; margin-bottom: 24px; padding: 16px 20px; background: var(--bg-glass); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+  .timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -30px; top: 20px;
+    width: 10px; height: 10px;
+    background: var(--accent);
+    border: 2px solid var(--bg);
+    border-radius: 50%;
+    box-shadow: 0 0 10px var(--glow-accent);
+  }
+  .timeline-item strong { color: var(--text); font-size: 0.9rem; }
+  .timeline-item p { color: #c4c4cc; font-size: 0.85rem; margin: 4px 0 0; }
+
+  /* ═══════════════════ CHECKLIST ═══════════════════ */
+  .checklist { list-style: none; padding: 0; }
+  .checklist li {
+    padding: 10px 0 10px 36px;
+    position: relative;
+    color: var(--text-secondary);
+    font-size: 0.92rem;
+  }
+  .checklist li::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 13px;
+    width: 20px; height: 20px;
+    border-radius: 6px;
+    background: rgba(52, 211, 153, 0.1);
+    border: 1px solid rgba(52, 211, 153, 0.2);
+  }
+  .checklist li::after {
+    content: '\2713';
+    position: absolute;
+    left: 4px; top: 12px;
+    color: var(--green);
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+
+  /* ═══════════════════ FOOTER ═══════════════════ */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 48px 24px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+  }
+  footer .footer-links { display: flex; gap: 24px; justify-content: center; margin-top: 12px; flex-wrap: wrap; }
+  footer a { color: var(--text-secondary); }
+  footer a:hover { color: var(--cyan); }
+
+  /* ═══════════════════ SCROLL ANIMATIONS ═══════════════════ */
+  .fade-in {
+    opacity: 0;
+    transform: translateY(24px);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+  }
+  .fade-in.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* ═══════════════════ RESPONSIVE ═══════════════════ */
+  @media (max-width: 768px) {
+    .topnav .nav-links { display: none; }
+    .bento { grid-template-columns: 1fr; }
+    .toc-grid { grid-template-columns: 1fr 1fr; }
+    .flow { flex-direction: column; }
+    .flow-arrow { transform: rotate(90deg); }
+    .hero { padding: 60px 20px 50px; }
+  }
+  @media (max-width: 480px) {
+    .toc-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- AMBIENT BACKGROUND -->
+<div class="ambient">
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+</div>
+
+<div class="wrapper">
+
+<!-- ═══════════════════ NAV ═══════════════════ -->
+<nav class="topnav">
+  <div class="logo">RKE2 Guide</div>
+  <div class="nav-links">
+    <a href="#ch1">Concepts</a>
+    <a href="#ch6">Install</a>
+    <a href="#ch9">Networking</a>
+    <a href="#ch10">Security</a>
+    <a href="#ch13">Troubleshoot</a>
+  </div>
+  <span class="pill">v2026</span>
+</nav>
+
+<!-- ═══════════════════ HERO ═══════════════════ -->
+<header class="hero">
+  <div class="hero-eyebrow">
+    <span class="dot"></span>
+    From Zero Knowledge to Production-Ready
+  </div>
+  <h1>RKE2 Deep Dive<br>Guide</h1>
+  <p class="subtitle">A complete, beginner-friendly guide to Rancher Kubernetes Engine 2 — explained step by step with real examples, diagrams, and hands-on commands.</p>
+  <div class="hero-cta">
+    <a href="#ch1" class="btn btn-primary">Start Learning</a>
+    <a href="#ch6" class="btn btn-outline">Jump to Install</a>
+  </div>
+</header>
+
+<!-- ═══════════════════ TOC ═══════════════════ -->
+<div class="toc-section">
+  <div class="toc-grid">
+    <a href="#ch1" class="toc-item"><span class="toc-num">01</span>What Problems Does It Solve?</a>
+    <a href="#ch2" class="toc-item"><span class="toc-num">02</span>What Is RKE2?</a>
+    <a href="#ch3" class="toc-item"><span class="toc-num">03</span>Architecture Overview</a>
+    <a href="#ch4" class="toc-item"><span class="toc-num">04</span>Core Components</a>
+    <a href="#ch5" class="toc-item"><span class="toc-num">05</span>RKE2 vs K3s vs RKE1</a>
+    <a href="#ch6" class="toc-item"><span class="toc-num">06</span>Single-Node Install</a>
+    <a href="#ch7" class="toc-item"><span class="toc-num">07</span>Adding Workers</a>
+    <a href="#ch8" class="toc-item"><span class="toc-num">08</span>HA Setup</a>
+    <a href="#ch9" class="toc-item"><span class="toc-num">09</span>Networking (CNI)</a>
+    <a href="#ch10" class="toc-item"><span class="toc-num">10</span>Security &amp; CIS</a>
+    <a href="#ch11" class="toc-item"><span class="toc-num">11</span>Configuration Ref</a>
+    <a href="#ch12" class="toc-item"><span class="toc-num">12</span>Day-2 Operations</a>
+    <a href="#ch13" class="toc-item"><span class="toc-num">13</span>Troubleshooting</a>
+    <a href="#ch14" class="toc-item"><span class="toc-num">14</span>Deploy an App</a>
+    <a href="#ch15" class="toc-item"><span class="toc-num">15</span>What's Next</a>
+  </div>
+</div>
+
+<main class="container">
+
+<!-- ═══════════════════ CHAPTER 1 ═══════════════════ -->
+<section id="ch1" class="fade-in">
+  <div class="section-header">
+    <div class="section-number">1</div>
+    <h2>Before RKE2 — What Problems Does It Solve?</h2>
+  </div>
+
+  <p>Imagine you built an amazing web application. It's running on one server. Then thousands of users show up. One server can't handle it. You need <strong style="color:var(--text)">many servers</strong> working together — but how do you coordinate them?</p>
+
+  <div class="analogy">
+    <div class="analogy-label">Real-World Analogy</div>
+    <p>Think of a <strong style="color:var(--text)">restaurant kitchen</strong>. One chef can cook a few meals. But for a busy restaurant you need many chefs, a head chef (manager), someone to take orders, and a system to make sure every dish gets cooked and served. <strong style="color:var(--text)">Kubernetes</strong> is that entire kitchen management system for your software. <strong style="color:var(--text)">RKE2</strong> is a specific, <em>security-first</em> way to set up that kitchen.</p>
+  </div>
+
+  <h3>The Core Problems</h3>
+
+  <div class="bento">
+    <div class="bento-card">
+      <div class="bento-icon blue">📦</div>
+      <h4>Container Orchestration</h4>
+      <p>You have dozens or hundreds of containers. Someone needs to decide <em>which server</em> runs <em>which container</em>, restart them if they crash, and scale them up/down.</p>
+    </div>
+    <div class="bento-card">
+      <div class="bento-icon purple">🔒</div>
+      <h4>Security &amp; Compliance</h4>
+      <p>Government agencies and enterprises need Kubernetes that is hardened out of the box — CIS benchmarks, FIPS encryption, and audit logging by default.</p>
+    </div>
+    <div class="bento-card">
+      <div class="bento-icon cyan">⚡</div>
+      <h4>Operational Simplicity</h4>
+      <p>Setting up vanilla Kubernetes is hard (dozens of certificates, configs, binaries). RKE2 bundles everything into a single binary with sane defaults.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════ CHAPTER 2 ═══════════════════ -->
+<section id="ch2" class="fade-in">
+  <div class="section-header">
+    <div class="section-number">2</div>
+    <h2>What Exactly Is RKE2?</h2>
+  </div>
+
+  <p><strong style="color:var(--text)">RKE2</strong> (Rancher Kubernetes Engine 2), also known as <strong style="color:var(--text)">RKE Government</strong>, is a fully conformant Kubernetes distribution built by <strong style="color:var(--text)">SUSE / Rancher</strong>. It's designed for environments where <em>security is non-negotiable</em>.</p>
+
+  <div class="callout callout-info">
+    <div class="callout-icon">💡</div>
+    <div class="callout-body">
+      <div class="callout-title">Key Identity</div>
+      <p>RKE2 combines the <strong style="color:var(--text)">ease of use</strong> of K3s (Rancher's lightweight distro) with the <strong style="color:var(--text)">close upstream alignment</strong> of RKE1 — and adds hardened security on top.</p>
+    </div>
+  </div>
+
+  <h3>The Name Explained</h3>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Part</th><th>Meaning</th></tr>
+      <tr><td><strong style="color:var(--text)">RKE</strong></td><td>Rancher Kubernetes Engine — Rancher's family of K8s distributions</td></tr>
+      <tr><td><strong style="color:var(--text)">2</strong></td><td>Second generation, replacing RKE1 (which reached end-of-life in July 2025)</td></tr>
+      <tr><td><strong style="color:var(--text)">"Government"</strong></td><td>Originally built to meet U.S. federal security standards (DISA STIG, CIS, FIPS)</td></tr>
+    </table>
+  </div>
+
+  <h3>What You Get Out of the Box</h3>
+  <ul class="checklist">
+    <li>CNCF-certified Kubernetes (passes all conformance tests)</li>
+    <li>Embedded <strong style="color:var(--text)">etcd</strong> — no external database needed</li>
+    <li><strong style="color:var(--text)">containerd</strong> runtime (Docker-free)</li>
+    <li>CIS Kubernetes Benchmark hardening by default</li>
+    <li>FIPS 140-2 compliant cryptography</li>
+    <li>Built-in <strong style="color:var(--text)">Canal CNI</strong> (Calico + Flannel)</li>
+    <li>Built-in <strong style="color:var(--text)">NGINX Ingress Controller</strong></li>
+    <li>Built-in <strong style="color:var(--text)">CoreDNS</strong> and <strong style="color:var(--text)">Metrics Server</strong></li>
+    <li>Helm Controller for managing add-ons</li>
+    <li>SELinux support</li>
+  </ul>
+</section>
+
+<!-- ═══════════════════ CHAPTER 3 ═══════════════════ -->
+<section id="ch3" class="fade-in">
+  <div class="section-header">
+    <div class="section-number">3</div>
+    <h2>RKE2 Architecture — The Big Picture</h2>
+  </div>
+
+  <p>An RKE2 cluster has two types of machines (called <strong style="color:var(--text)">nodes</strong>):</p>
+
+  <div class="bento" style="grid-template-columns: 1fr 1fr;">
+    <div class="bento-card" style="border-top: 2px solid var(--accent);">
+      <h4>Server Node (Control Plane)</h4>
+      <p>The "brain" of the cluster. It decides what runs where, stores the cluster state, and exposes the Kubernetes API. In production you run <strong style="color:var(--text)">3 server nodes</strong> for high availability.</p>
+    </div>
+    <div class="bento-card" style="border-top: 2px solid var(--green);">
+      <h4>Agent Node (Worker)</h4>
+      <p>The "muscles" of the cluster. These actually <em>run your applications</em> (as containers inside Pods). You can have as many agent nodes as you need.</p>
+    </div>
+  </div>
+
+  <!-- ANIMATED ARCHITECTURE DIAGRAM -->
+  <div class="visual-diagram" style="background:rgba(0,0,0,0.3);border:1px solid var(--border);border-radius:var(--radius);padding:32px 16px;margin:20px 0;overflow-x:auto;">
+    <svg viewBox="0 0 900 520" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:900px;display:block;margin:0 auto;" font-family="Inter,system-ui,sans-serif">
+      <defs>
+        <linearGradient id="gradPurple" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#6366f1"/><stop offset="100%" stop-color="#8b5cf6"/></linearGradient>
+        <linearGradient id="gradCyan" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#06b6d4"/><stop offset="100%" stop-color="#22d3ee"/></linearGradient>
+        <linearGradient id="gradGreen" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#059669"/><stop offset="100%" stop-color="#34d399"/></linearGradient>
+        <linearGradient id="gradAmber" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#d97706"/><stop offset="100%" stop-color="#fbbf24"/></linearGradient>
+        <filter id="glow1"><feGaussianBlur stdDeviation="6" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        <filter id="softShadow"><feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#000" flood-opacity="0.4"/></filter>
+      </defs>
+
+      <!-- LOAD BALANCER -->
+      <g filter="url(#softShadow)">
+        <rect x="330" y="10" width="240" height="56" rx="14" fill="url(#gradAmber)" opacity="0.9">
+          <animate attributeName="opacity" values="0.9;1;0.9" dur="3s" repeatCount="indefinite"/>
+        </rect>
+        <text x="450" y="34" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">LOAD BALANCER</text>
+        <text x="450" y="52" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-size="11">ports 9345 &amp; 6443</text>
+      </g>
+
+      <!-- Lines LB → Servers -->
+      <g stroke="url(#gradPurple)" stroke-width="2" fill="none" opacity="0.5">
+        <line x1="390" y1="66" x2="175" y2="120"><animate attributeName="opacity" values="0.3;0.7;0.3" dur="2s" repeatCount="indefinite"/></line>
+        <line x1="450" y1="66" x2="450" y2="120"><animate attributeName="opacity" values="0.3;0.7;0.3" dur="2s" begin="0.3s" repeatCount="indefinite"/></line>
+        <line x1="510" y1="66" x2="725" y2="120"><animate attributeName="opacity" values="0.3;0.7;0.3" dur="2s" begin="0.6s" repeatCount="indefinite"/></line>
+      </g>
+      <!-- Animated data packets LB → Servers -->
+      <circle r="4" fill="#fbbf24" filter="url(#glow1)"><animateMotion dur="2s" repeatCount="indefinite" path="M390,66 L175,120"/></circle>
+      <circle r="4" fill="#fbbf24" filter="url(#glow1)"><animateMotion dur="2s" repeatCount="indefinite" begin="0.7s" path="M450,66 L450,120"/></circle>
+      <circle r="4" fill="#fbbf24" filter="url(#glow1)"><animateMotion dur="2s" repeatCount="indefinite" begin="1.4s" path="M510,66 L725,120"/></circle>
+
+      <!-- SERVER NODE 1 -->
+      <g filter="url(#softShadow)">
+        <rect x="50" y="120" width="250" height="150" rx="16" fill="rgba(99,102,241,0.08)" stroke="rgba(99,102,241,0.3)" stroke-width="1.5"/>
+        <rect x="50" y="120" width="250" height="32" rx="16" fill="url(#gradPurple)" opacity="0.85"/>
+        <rect x="50" y="136" width="250" height="16" fill="url(#gradPurple)" opacity="0.85"/>
+        <text x="175" y="141" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">SERVER NODE 1</text>
+        <g font-size="10.5" fill="#a1a1aa">
+          <text x="74" y="172">kube-apiserver</text><text x="74" y="188">kube-scheduler</text>
+          <text x="74" y="204">controller-mgr</text><text x="74" y="220">etcd</text><text x="74" y="236">kubelet</text>
+        </g>
+        <!-- Heartbeat indicator -->
+        <circle cx="272" cy="137" r="5" fill="#34d399"><animate attributeName="r" values="4;6;4" dur="1.5s" repeatCount="indefinite"/><animate attributeName="opacity" values="1;0.5;1" dur="1.5s" repeatCount="indefinite"/></circle>
+      </g>
+
+      <!-- SERVER NODE 2 -->
+      <g filter="url(#softShadow)">
+        <rect x="325" y="120" width="250" height="150" rx="16" fill="rgba(99,102,241,0.08)" stroke="rgba(99,102,241,0.3)" stroke-width="1.5"/>
+        <rect x="325" y="120" width="250" height="32" rx="16" fill="url(#gradPurple)" opacity="0.85"/>
+        <rect x="325" y="136" width="250" height="16" fill="url(#gradPurple)" opacity="0.85"/>
+        <text x="450" y="141" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">SERVER NODE 2</text>
+        <g font-size="10.5" fill="#a1a1aa">
+          <text x="349" y="172">kube-apiserver</text><text x="349" y="188">kube-scheduler</text>
+          <text x="349" y="204">controller-mgr</text><text x="349" y="220">etcd</text><text x="349" y="236">kubelet</text>
+        </g>
+        <circle cx="547" cy="137" r="5" fill="#34d399"><animate attributeName="r" values="4;6;4" dur="1.5s" begin="0.5s" repeatCount="indefinite"/><animate attributeName="opacity" values="1;0.5;1" dur="1.5s" begin="0.5s" repeatCount="indefinite"/></circle>
+      </g>
+
+      <!-- SERVER NODE 3 -->
+      <g filter="url(#softShadow)">
+        <rect x="600" y="120" width="250" height="150" rx="16" fill="rgba(99,102,241,0.08)" stroke="rgba(99,102,241,0.3)" stroke-width="1.5"/>
+        <rect x="600" y="120" width="250" height="32" rx="16" fill="url(#gradPurple)" opacity="0.85"/>
+        <rect x="600" y="136" width="250" height="16" fill="url(#gradPurple)" opacity="0.85"/>
+        <text x="725" y="141" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">SERVER NODE 3</text>
+        <g font-size="10.5" fill="#a1a1aa">
+          <text x="624" y="172">kube-apiserver</text><text x="624" y="188">kube-scheduler</text>
+          <text x="624" y="204">controller-mgr</text><text x="624" y="220">etcd</text><text x="624" y="236">kubelet</text>
+        </g>
+        <circle cx="822" cy="137" r="5" fill="#34d399"><animate attributeName="r" values="4;6;4" dur="1.5s" begin="1s" repeatCount="indefinite"/><animate attributeName="opacity" values="1;0.5;1" dur="1.5s" begin="1s" repeatCount="indefinite"/></circle>
+      </g>
+
+      <!-- etcd sync lines between servers -->
+      <g stroke="rgba(139,92,246,0.3)" stroke-width="1.5" stroke-dasharray="6,4">
+        <line x1="300" y1="220" x2="325" y2="220"><animate attributeName="stroke-opacity" values="0.2;0.6;0.2" dur="2s" repeatCount="indefinite"/></line>
+        <line x1="575" y1="220" x2="600" y2="220"><animate attributeName="stroke-opacity" values="0.2;0.6;0.2" dur="2s" begin="0.5s" repeatCount="indefinite"/></line>
+      </g>
+      <text x="313" y="215" text-anchor="middle" fill="#a78bfa" font-size="8">etcd sync</text>
+      <text x="588" y="215" text-anchor="middle" fill="#a78bfa" font-size="8">etcd sync</text>
+
+      <!-- Lines Servers → Agents -->
+      <g stroke="rgba(34,211,238,0.25)" stroke-width="1.5" fill="none">
+        <line x1="175" y1="270" x2="175" y2="330"/>
+        <line x1="450" y1="270" x2="450" y2="330"/>
+        <line x1="725" y1="270" x2="725" y2="330"/>
+      </g>
+      <!-- Data flow packets down -->
+      <circle r="3" fill="#22d3ee" filter="url(#glow1)"><animateMotion dur="1.8s" repeatCount="indefinite" path="M175,270 L175,330"/></circle>
+      <circle r="3" fill="#22d3ee" filter="url(#glow1)"><animateMotion dur="1.8s" repeatCount="indefinite" begin="0.6s" path="M450,270 L450,330"/></circle>
+      <circle r="3" fill="#22d3ee" filter="url(#glow1)"><animateMotion dur="1.8s" repeatCount="indefinite" begin="1.2s" path="M725,270 L725,330"/></circle>
+
+      <!-- AGENT NODE 1 -->
+      <g filter="url(#softShadow)">
+        <rect x="50" y="330" width="250" height="150" rx="16" fill="rgba(34,211,238,0.06)" stroke="rgba(34,211,238,0.25)" stroke-width="1.5"/>
+        <rect x="50" y="330" width="250" height="32" rx="16" fill="url(#gradCyan)" opacity="0.8"/>
+        <rect x="50" y="346" width="250" height="16" fill="url(#gradCyan)" opacity="0.8"/>
+        <text x="175" y="351" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">AGENT NODE 1</text>
+        <g font-size="10.5" fill="#a1a1aa">
+          <text x="74" y="382">kubelet</text><text x="74" y="398">kube-proxy</text>
+          <text x="74" y="414">containerd</text>
+        </g>
+        <rect x="74" y="424" width="90" height="22" rx="6" fill="rgba(52,211,153,0.15)" stroke="rgba(52,211,153,0.3)" stroke-width="1"/>
+        <text x="119" y="439" text-anchor="middle" fill="#34d399" font-size="10" font-weight="600">your apps</text>
+        <!-- Running container animation -->
+        <rect x="174" y="424" width="22" height="22" rx="6" fill="rgba(99,102,241,0.15)" stroke="rgba(99,102,241,0.3)" stroke-width="1"><animate attributeName="opacity" values="0.5;1;0.5" dur="3s" repeatCount="indefinite"/></rect>
+        <text x="185" y="439" text-anchor="middle" fill="#a78bfa" font-size="12">⎈</text>
+      </g>
+
+      <!-- AGENT NODE 2 -->
+      <g filter="url(#softShadow)">
+        <rect x="325" y="330" width="250" height="150" rx="16" fill="rgba(34,211,238,0.06)" stroke="rgba(34,211,238,0.25)" stroke-width="1.5"/>
+        <rect x="325" y="330" width="250" height="32" rx="16" fill="url(#gradCyan)" opacity="0.8"/>
+        <rect x="325" y="346" width="250" height="16" fill="url(#gradCyan)" opacity="0.8"/>
+        <text x="450" y="351" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">AGENT NODE 2</text>
+        <g font-size="10.5" fill="#a1a1aa">
+          <text x="349" y="382">kubelet</text><text x="349" y="398">kube-proxy</text>
+          <text x="349" y="414">containerd</text>
+        </g>
+        <rect x="349" y="424" width="90" height="22" rx="6" fill="rgba(52,211,153,0.15)" stroke="rgba(52,211,153,0.3)" stroke-width="1"/>
+        <text x="394" y="439" text-anchor="middle" fill="#34d399" font-size="10" font-weight="600">your apps</text>
+        <rect x="449" y="424" width="22" height="22" rx="6" fill="rgba(99,102,241,0.15)" stroke="rgba(99,102,241,0.3)" stroke-width="1"><animate attributeName="opacity" values="0.5;1;0.5" dur="3s" begin="1s" repeatCount="indefinite"/></rect>
+        <text x="460" y="439" text-anchor="middle" fill="#a78bfa" font-size="12">⎈</text>
+      </g>
+
+      <!-- AGENT NODE N -->
+      <g filter="url(#softShadow)">
+        <rect x="600" y="330" width="250" height="150" rx="16" fill="rgba(34,211,238,0.06)" stroke="rgba(34,211,238,0.25)" stroke-width="1.5"/>
+        <rect x="600" y="330" width="250" height="32" rx="16" fill="url(#gradCyan)" opacity="0.8"/>
+        <rect x="600" y="346" width="250" height="16" fill="url(#gradCyan)" opacity="0.8"/>
+        <text x="725" y="351" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">AGENT NODE N</text>
+        <g font-size="10.5" fill="#a1a1aa">
+          <text x="624" y="382">kubelet</text><text x="624" y="398">kube-proxy</text>
+          <text x="624" y="414">containerd</text>
+        </g>
+        <rect x="624" y="424" width="90" height="22" rx="6" fill="rgba(52,211,153,0.15)" stroke="rgba(52,211,153,0.3)" stroke-width="1"/>
+        <text x="669" y="439" text-anchor="middle" fill="#34d399" font-size="10" font-weight="600">your apps</text>
+        <rect x="724" y="424" width="22" height="22" rx="6" fill="rgba(99,102,241,0.15)" stroke="rgba(99,102,241,0.3)" stroke-width="1"><animate attributeName="opacity" values="0.5;1;0.5" dur="3s" begin="2s" repeatCount="indefinite"/></rect>
+        <text x="735" y="439" text-anchor="middle" fill="#a78bfa" font-size="12">⎈</text>
+      </g>
+
+      <!-- Labels -->
+      <text x="450" y="305" text-anchor="middle" fill="#71717a" font-size="10" letter-spacing="2" text-transform="uppercase" font-weight="600" style="text-transform:uppercase">CONTROL PLANE ↑ &nbsp;&nbsp; ↓ DATA PLANE</text>
+
+      <!-- Legend -->
+      <g transform="translate(50,495)" font-size="10" fill="#71717a">
+        <circle cx="0" cy="-4" r="5" fill="#fbbf24" opacity="0.8"/><text x="12" y="0">Load Balancer</text>
+        <rect x="110" y="-9" width="10" height="10" rx="3" fill="url(#gradPurple)" opacity="0.8"/><text x="126" y="0">Server (Control Plane)</text>
+        <rect x="280" y="-9" width="10" height="10" rx="3" fill="url(#gradCyan)" opacity="0.8"/><text x="296" y="0">Agent (Worker)</text>
+        <circle cx="410" cy="-4" r="4" fill="#34d399"><animate attributeName="r" values="3;5;3" dur="1.5s" repeatCount="indefinite"/></circle><text x="420" y="0">Healthy</text>
+      </g>
+    </svg>
+    <div class="diagram-caption">Figure 1: RKE2 High-Availability Architecture — 3 server nodes + N agent nodes</div>
+  </div>
+
+  <h3>How the Pieces Talk to Each Other</h3>
+  <div class="flow">
+    <div class="flow-item">User / kubectl</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-item">Load Balancer<small>:6443</small></div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-item">kube-apiserver</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-item">Scheduler</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-item">kubelet</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-item">containerd → Pod</div>
+  </div>
+
+  <h3>Port Reference</h3>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Port</th><th>Protocol</th><th>Purpose</th><th>Used By</th></tr>
+      <tr><td>9345</td><td>TCP</td><td>RKE2 supervisor API (node registration)</td><td>Server &amp; Agent nodes</td></tr>
+      <tr><td>6443</td><td>TCP</td><td>Kubernetes API server</td><td>kubectl, agents, external</td></tr>
+      <tr><td>2379-2380</td><td>TCP</td><td>etcd client &amp; peer communication</td><td>Server nodes only</td></tr>
+      <tr><td>10250</td><td>TCP</td><td>kubelet metrics / exec</td><td>All nodes</td></tr>
+      <tr><td>8472</td><td>UDP</td><td>VXLAN (Canal/Flannel overlay)</td><td>All nodes</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- ═══════════════════ CHAPTER 4 ═══════════════════ -->
+<section id="ch4" class="fade-in">
+  <div class="section-header">
+    <div class="section-number">4</div>
+    <h2>Core Components Explained</h2>
+  </div>
+
+  <p>Let's break down every piece running inside an RKE2 cluster, explained so anyone can understand:</p>
+
+  <div class="analogy">
+    <div class="analogy-label">Restaurant Analogy Continues</div>
+    <p>We'll keep using our restaurant kitchen analogy. Each Kubernetes component maps to a role in the kitchen.</p>
+  </div>
+
+  <div class="bento" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));">
+    <div class="bento-card">
+      <div class="bento-icon blue">📋</div>
+      <h4>kube-apiserver</h4>
+      <p><strong style="color:var(--text)">The Front Desk.</strong> Every request goes through here — "create a pod", "list services", "delete a deployment". Port 6443.</p>
+    </div>
+    <div class="bento-card">
+      <div class="bento-icon purple">🗄️</div>
+      <h4>etcd</h4>
+      <p><strong style="color:var(--text)">The Recipe Book.</strong> A distributed key-value database storing the <em>entire state</em> of the cluster. RKE2 embeds it — no separate setup.</p>
+    </div>
+    <div class="bento-card">
+      <div class="bento-icon cyan">📅</div>
+      <h4>kube-scheduler</h4>
+      <p><strong style="color:var(--text)">The Assignment Manager.</strong> Picks the best node for new pods based on CPU, memory, affinity rules.</p>
+    </div>
+    <div class="bento-card">
+      <div class="bento-icon green">🔄</div>
+      <h4>kube-controller-manager</h4>
+      <p><strong style="color:var(--text)">The Quality Inspector.</strong> Watches state and makes corrections. If 3 replicas desired but 2 running — creates the 3rd.</p>
+    </div>
+    <div class="bento-card">
+      <div class="bento-icon amber">🔧</div>
+      <h4>kubelet</h4>
+      <p><strong style="color:var(--text)">The Line Cook.</strong> Runs on <em>every</em> node. Receives instructions and makes sure containers are running.</p>
+    </div>
+    <div class="bento-card">
+      <div class="bento-icon rose">🌐</div>
+      <h4>kube-proxy</h4>
+      <p><strong style="color:var(--text)">The Waiter.</strong> Manages network rules so requests reach the right pod — even across nodes.</p>
+    </div>
+    <div class="bento-card">
+      <div class="bento-icon cyan">🐳</div>
+      <h4>containerd</h4>
+      <p><strong style="color:var(--text)">The Oven.</strong> The container runtime that pulls images, starts containers, manages their lifecycle. Not Docker.</p>
+    </div>
+    <div class="bento-card">
+      <div class="bento-icon purple">🔌</div>
+      <h4>Canal CNI</h4>
+      <p><strong style="color:var(--text)">The Intercom.</strong> Calico handles network policies. Flannel creates the overlay so all pods can communicate.</p>
+    </div>
+    <div class="bento-card">
+      <div class="bento-icon green">🚪</div>
+      <h4>NGINX Ingress</h4>
+      <p><strong style="color:var(--text)">The Entrance.</strong> Routes external HTTP/HTTPS traffic to correct services based on hostnames and paths.</p>
+    </div>
+    <div class="bento-card">
+      <div class="bento-icon blue">📡</div>
+      <h4>CoreDNS</h4>
+      <p><strong style="color:var(--text)">Name Tags.</strong> Internal DNS so pods find services by name instead of IP addresses.</p>
+    </div>
+    <div class="bento-card">
+      <div class="bento-icon amber">📊</div>
+      <h4>Metrics Server</h4>
+      <p><strong style="color:var(--text)">The Thermometer.</strong> Collects CPU/memory usage. Required for <code>kubectl top</code> and autoscaling.</p>
+    </div>
+    <div class="bento-card">
+      <div class="bento-icon rose">⎈</div>
+      <h4>Helm Controller</h4>
+      <p><strong style="color:var(--text)">Recipe Installer.</strong> Auto-deploys Helm charts shipped with RKE2 via HelmChart CRDs.</p>
+    </div>
+  </div>
+
+  <h3>How RKE2 Starts — The Bootstrap Sequence</h3>
+  <div class="timeline">
+    <div class="timeline-item">
+      <strong>1. rke2-server binary starts</strong>
+      <p>The single binary contains everything: apiserver, scheduler, controller-manager, etcd, kubelet, and containerd.</p>
+    </div>
+    <div class="timeline-item">
+      <strong>2. TLS certificates are generated</strong>
+      <p>Self-signed CA + all component certificates are created automatically in <code>/var/lib/rancher/rke2/server/tls/</code>.</p>
+    </div>
+    <div class="timeline-item">
+      <strong>3. etcd starts</strong>
+      <p>The embedded etcd launches and initializes the cluster state database.</p>
+    </div>
+    <div class="timeline-item">
+      <strong>4. kube-apiserver starts</strong>
+      <p>API server comes online, listening on port 6443.</p>
+    </div>
+    <div class="timeline-item">
+      <strong>5. Static pods are deployed</strong>
+      <p>Unlike RKE1 (which used Docker), RKE2 runs control plane components as <em>static pods</em> managed by the kubelet.</p>
+    </div>
+    <div class="timeline-item">
+      <strong>6. Helm charts are applied</strong>
+      <p>The Helm Controller deploys bundled add-ons: Canal CNI, CoreDNS, NGINX Ingress, and Metrics Server.</p>
+    </div>
+    <div class="timeline-item">
+      <strong>7. Node token is generated</strong>
+      <p>A token is written to <code>/var/lib/rancher/rke2/server/node-token</code> — this is what agent nodes use to join.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════ CHAPTER 5 ═══════════════════ -->
+<section id="ch5" class="fade-in">
+  <div class="section-header">
+    <div class="section-number">5</div>
+    <h2>How RKE2 Differs from K3s &amp; RKE1</h2>
+  </div>
+
+  <p>Rancher/SUSE offers three Kubernetes distributions. Here's how they compare:</p>
+
+  <div class="table-wrap">
+    <table>
+      <tr><th>Feature</th><th>RKE1 (EOL)</th><th>K3s</th><th>RKE2</th></tr>
+      <tr><td><strong style="color:var(--text)">Status</strong></td><td>End-of-life (Jul 2025)</td><td>Active</td><td style="color:var(--green)">Active (recommended)</td></tr>
+      <tr><td><strong style="color:var(--text)">Target</strong></td><td>General purpose</td><td>Edge / IoT / Dev</td><td>Enterprise / Government</td></tr>
+      <tr><td><strong style="color:var(--text)">Runtime</strong></td><td>Docker</td><td>containerd</td><td>containerd</td></tr>
+      <tr><td><strong style="color:var(--text)">Data Store</strong></td><td>External etcd</td><td>SQLite / etcd / MySQL / Postgres</td><td>Embedded etcd only</td></tr>
+      <tr><td><strong style="color:var(--text)">CIS Hardened</strong></td><td>Manual effort</td><td>Manual effort</td><td style="color:var(--green)">By default</td></tr>
+      <tr><td><strong style="color:var(--text)">FIPS 140-2</strong></td><td style="color:var(--rose)">No</td><td style="color:var(--rose)">No</td><td style="color:var(--green)">Yes</td></tr>
+      <tr><td><strong style="color:var(--text)">SELinux</strong></td><td>Limited</td><td>Supported</td><td style="color:var(--green)">Full support</td></tr>
+      <tr><td><strong style="color:var(--text)">Secrets Encryption</strong></td><td>Manual</td><td>Optional flag</td><td style="color:var(--green)">Enabled by default</td></tr>
+      <tr><td><strong style="color:var(--text)">Min Resources</strong></td><td>4 GB RAM</td><td>512 MB RAM</td><td>4 GB RAM</td></tr>
+      <tr><td><strong style="color:var(--text)">Control Plane</strong></td><td>Docker containers</td><td>Single process</td><td>Static pods via kubelet</td></tr>
+      <tr><td><strong style="color:var(--text)">Windows Nodes</strong></td><td>Yes</td><td style="color:var(--rose)">No</td><td style="color:var(--green)">Yes</td></tr>
+    </table>
+  </div>
+
+  <div class="callout callout-info">
+    <div class="callout-icon">🎯</div>
+    <div class="callout-body">
+      <div class="callout-title">When to Choose What?</div>
+      <p><strong style="color:var(--text)">Choose RKE2</strong> if: you need production-grade security, compliance certifications, enterprise support, or you're replacing RKE1.<br>
+      <strong style="color:var(--text)">Choose K3s</strong> if: you're running on edge devices, Raspberry Pi's, CI/CD environments, or need minimal resource usage.<br>
+      <strong style="color:var(--rose)">Avoid RKE1</strong>: it's end-of-life. Migrate to RKE2 or K3s.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════ CHAPTER 6 ═══════════════════ -->
+<section id="ch6" class="fade-in">
+  <div class="section-header">
+    <div class="section-number">6</div>
+    <h2>Hands-On: Installing a Single-Node Cluster</h2>
+  </div>
+
+  <p>Let's set up a working RKE2 cluster from scratch. We'll start with a single server node — perfect for learning.</p>
+
+  <h3>Prerequisites</h3>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Requirement</th><th>Minimum</th><th>Recommended</th></tr>
+      <tr><td>OS</td><td>Ubuntu 20.04+ / RHEL 8+ / SLES 15+</td><td>Ubuntu 22.04 LTS</td></tr>
+      <tr><td>CPU</td><td>2 cores</td><td>4 cores</td></tr>
+      <tr><td>RAM</td><td>4 GB</td><td>8 GB</td></tr>
+      <tr><td>Disk</td><td>20 GB</td><td>50+ GB SSD</td></tr>
+      <tr><td>User</td><td colspan="2">root or sudo access</td></tr>
+    </table>
+  </div>
+
+  <div class="step-card">
+    <div class="step-badge">Step 1 — Download &amp; Install RKE2</div>
+    <p style="color:var(--text-secondary)">RKE2 provides an installer script that sets up the binary and systemd service:</p>
+    <pre><code><span class="comment"># Download and run the official installer</span>
+<span class="cmd">curl</span> <span class="flag">-sfL</span> https://get.rke2.io | <span class="cmd">sudo</span> sh -
+
+<span class="comment"># What just happened?</span>
+<span class="comment"># 1. Downloaded the rke2 binary to /usr/local/bin/rke2</span>
+<span class="comment"># 2. Created a systemd service: rke2-server.service</span>
+<span class="comment"># 3. Created config directory: /etc/rancher/rke2/</span></code></pre>
+  </div>
+
+  <div class="step-card">
+    <div class="step-badge">Step 2 — (Optional) Create a Config File</div>
+    <pre><code><span class="comment"># Create the config directory</span>
+<span class="cmd">sudo</span> mkdir -p /etc/rancher/rke2
+
+<span class="comment"># Create config file</span>
+<span class="cmd">sudo</span> tee /etc/rancher/rke2/config.yaml &lt;&lt;EOF
+<span class="comment"># Specify a custom node name</span>
+<span class="string">node-name: my-first-server</span>
+
+<span class="comment"># Enable CIS hardening profile</span>
+<span class="string">profile: cis</span>
+
+<span class="comment"># Use Canal CNI (default, but being explicit)</span>
+<span class="string">cni: canal</span>
+
+<span class="comment"># Write kubeconfig with this permission</span>
+<span class="string">write-kubeconfig-mode: "0644"</span>
+
+<span class="comment"># TLS Subject Alternative Names</span>
+<span class="string">tls-san:</span>
+<span class="string">  - my-server.example.com</span>
+<span class="string">  - 10.0.0.100</span>
+EOF</code></pre>
+  </div>
+
+  <div class="step-card">
+    <div class="step-badge">Step 3 — Start the RKE2 Server</div>
+    <pre><code><span class="comment"># Enable the service so it starts on boot</span>
+<span class="cmd">sudo</span> systemctl enable rke2-server.service
+
+<span class="comment"># Start RKE2 (this takes 2-5 minutes on first run)</span>
+<span class="cmd">sudo</span> systemctl start rke2-server.service
+
+<span class="comment"># Watch the startup logs in real-time</span>
+<span class="cmd">sudo</span> journalctl -u rke2-server -f</code></pre>
+
+    <div class="callout callout-warn">
+      <div class="callout-icon">⏳</div>
+      <div class="callout-body">
+        <div class="callout-title">Be Patient!</div>
+        <p>The first start downloads container images and bootstraps etcd + all control plane components. It can take <strong style="color:var(--text)">2–10 minutes</strong> depending on your internet speed.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="step-card">
+    <div class="step-badge">Step 4 — Configure Your Shell for kubectl</div>
+    <pre><code><span class="comment"># Add RKE2 binaries to PATH</span>
+<span class="cmd">echo</span> <span class="string">'export PATH=$PATH:/var/lib/rancher/rke2/bin'</span> >> ~/.bashrc
+
+<span class="comment"># Point kubectl to the RKE2 kubeconfig</span>
+<span class="cmd">echo</span> <span class="string">'export KUBECONFIG=/etc/rancher/rke2/rke2.yaml'</span> >> ~/.bashrc
+
+<span class="comment"># Apply changes immediately</span>
+<span class="cmd">source</span> ~/.bashrc
+
+<span class="comment"># Verify kubectl works</span>
+<span class="cmd">kubectl</span> version --short</code></pre>
+  </div>
+
+  <div class="step-card">
+    <div class="step-badge">Step 5 — Verify Your Cluster</div>
+    <pre><code><span class="comment"># Check node status (should show "Ready")</span>
+<span class="cmd">kubectl</span> get nodes
+<span class="output">NAME              STATUS   ROLES                       AGE   VERSION
+my-first-server   Ready    control-plane,etcd,master   3m    v1.30.x+rke2r1</span>
+
+<span class="comment"># Check all system pods are running</span>
+<span class="cmd">kubectl</span> get pods -A
+<span class="output">NAMESPACE     NAME                                          READY   STATUS
+kube-system   etcd-my-first-server                           1/1     Running
+kube-system   kube-apiserver-my-first-server                 1/1     Running
+kube-system   kube-controller-manager-my-first-server        1/1     Running
+kube-system   kube-scheduler-my-first-server                 1/1     Running
+kube-system   rke2-canal-xxxxx                               2/2     Running
+kube-system   rke2-coredns-rke2-coredns-xxxxx                1/1     Running
+kube-system   rke2-ingress-nginx-controller-xxxxx            1/1     Running
+kube-system   rke2-metrics-server-xxxxx                      1/1     Running</span>
+
+<span class="comment"># Save the node token (needed for adding more nodes later)</span>
+<span class="cmd">sudo</span> cat /var/lib/rancher/rke2/server/node-token
+<span class="output">K10abc123def456...::server:xyz789...</span></code></pre>
+  </div>
+
+  <div class="callout callout-success">
+    <div class="callout-icon">🎉</div>
+    <div class="callout-body">
+      <div class="callout-title">Congratulations!</div>
+      <p>You now have a working single-node RKE2 Kubernetes cluster with all core components running.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════ CHAPTER 7 ═══════════════════ -->
+<section id="ch7" class="fade-in">
+  <div class="section-header">
+    <div class="section-number">7</div>
+    <h2>Hands-On: Adding Worker Nodes</h2>
+  </div>
+
+  <p>A single node is great for learning, but in production you need dedicated worker (agent) nodes. Here's how to add them.</p>
+
+  <!-- ANIMATED SERVER ↔ AGENT DIAGRAM -->
+  <div class="visual-diagram" style="background:rgba(0,0,0,0.3);border:1px solid var(--border);border-radius:var(--radius);padding:32px 16px;margin:20px 0;">
+    <svg viewBox="0 0 700 200" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:700px;display:block;margin:0 auto;" font-family="Inter,system-ui,sans-serif">
+      <defs>
+        <linearGradient id="gJoinPurple" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#6366f1"/><stop offset="100%" stop-color="#8b5cf6"/></linearGradient>
+        <linearGradient id="gJoinCyan" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#06b6d4"/><stop offset="100%" stop-color="#22d3ee"/></linearGradient>
+        <filter id="glowJ"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      </defs>
+      <!-- Server Node -->
+      <rect x="30" y="20" width="260" height="160" rx="16" fill="rgba(99,102,241,0.08)" stroke="rgba(99,102,241,0.3)" stroke-width="1.5"/>
+      <rect x="30" y="20" width="260" height="34" rx="16" fill="url(#gJoinPurple)" opacity="0.85"/>
+      <rect x="30" y="38" width="260" height="16" fill="url(#gJoinPurple)" opacity="0.85"/>
+      <text x="160" y="43" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">SERVER NODE</text>
+      <text x="160" y="61" text-anchor="middle" fill="rgba(255,255,255,0.6)" font-size="10">10.0.0.100</text>
+      <g font-size="11" fill="#a1a1aa"><text x="54" y="86">token</text><text x="54" y="104">kube-apiserver</text><text x="54" y="122">etcd</text><text x="54" y="140">scheduler</text><text x="54" y="158">kubelet</text></g>
+      <circle cx="262" cy="42" r="5" fill="#34d399"><animate attributeName="r" values="4;6;4" dur="1.5s" repeatCount="indefinite"/></circle>
+
+      <!-- Agent Node -->
+      <rect x="410" y="20" width="260" height="160" rx="16" fill="rgba(34,211,238,0.06)" stroke="rgba(34,211,238,0.25)" stroke-width="1.5"/>
+      <rect x="410" y="20" width="260" height="34" rx="16" fill="url(#gJoinCyan)" opacity="0.8"/>
+      <rect x="410" y="38" width="260" height="16" fill="url(#gJoinCyan)" opacity="0.8"/>
+      <text x="540" y="43" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">AGENT NODE</text>
+      <text x="540" y="61" text-anchor="middle" fill="rgba(255,255,255,0.6)" font-size="10">10.0.0.101</text>
+      <g font-size="11" fill="#a1a1aa"><text x="434" y="86">kubelet</text><text x="434" y="104">kube-proxy</text><text x="434" y="122">containerd</text></g>
+      <rect x="434" y="140" width="90" height="22" rx="6" fill="rgba(52,211,153,0.15)" stroke="rgba(52,211,153,0.3)" stroke-width="1"/>
+      <text x="479" y="155" text-anchor="middle" fill="#34d399" font-size="10" font-weight="600">YOUR APPS</text>
+
+      <!-- Connection line -->
+      <line x1="290" y1="100" x2="410" y2="100" stroke="rgba(251,191,36,0.3)" stroke-width="2" stroke-dasharray="6,4"/>
+
+      <!-- Animated join packet -->
+      <circle r="5" fill="#fbbf24" filter="url(#glowJ)"><animateMotion dur="2s" repeatCount="indefinite" path="M410,100 L290,100"/></circle>
+      <circle r="3" fill="#22d3ee" opacity="0.7"><animateMotion dur="2.5s" repeatCount="indefinite" begin="1s" path="M290,100 L410,100"/></circle>
+
+      <!-- Label -->
+      <text x="350" y="82" text-anchor="middle" fill="#fbbf24" font-size="11" font-weight="600">join :9345</text>
+      <text x="350" y="125" text-anchor="middle" fill="#71717a" font-size="9">token exchange</text>
+    </svg>
+  </div>
+
+  <div class="step-card">
+    <div class="step-badge">Step 1 — Install RKE2 Agent on the Worker</div>
+    <pre><code><span class="comment"># Install RKE2 in AGENT mode (not server)</span>
+<span class="cmd">curl</span> <span class="flag">-sfL</span> https://get.rke2.io | INSTALL_RKE2_TYPE=<span class="string">"agent"</span> <span class="cmd">sudo</span> sh -</code></pre>
+  </div>
+
+  <div class="step-card">
+    <div class="step-badge">Step 2 — Configure the Agent</div>
+    <pre><code><span class="cmd">sudo</span> mkdir -p /etc/rancher/rke2
+
+<span class="cmd">sudo</span> tee /etc/rancher/rke2/config.yaml &lt;&lt;EOF
+<span class="comment"># Point to the server's supervisor port</span>
+<span class="string">server: https://10.0.0.100:9345</span>
+
+<span class="comment"># Paste the token from the server node</span>
+<span class="string">token: K10abc123def456...::server:xyz789...</span>
+
+<span class="comment"># Give this worker a friendly name</span>
+<span class="string">node-name: worker-01</span>
+EOF</code></pre>
+  </div>
+
+  <div class="step-card">
+    <div class="step-badge">Step 3 — Start &amp; Verify</div>
+    <pre><code><span class="cmd">sudo</span> systemctl enable --now rke2-agent.service
+
+<span class="comment"># Back on the server node:</span>
+<span class="cmd">kubectl</span> get nodes
+<span class="output">NAME              STATUS   ROLES                       AGE   VERSION
+my-first-server   Ready    control-plane,etcd,master   30m   v1.30.x+rke2r1
+worker-01         Ready    &lt;none&gt;                      2m    v1.30.x+rke2r1</span>
+
+<span class="comment"># Label the worker for organization</span>
+<span class="cmd">kubectl</span> label node worker-01 node-role.kubernetes.io/worker=worker</code></pre>
+  </div>
+
+  <div class="callout callout-info">
+    <div class="callout-icon">🔁</div>
+    <div class="callout-body">
+      <div class="callout-title">Repeat for More Workers</div>
+      <p>Simply repeat Steps 1-3 on each additional machine, changing the <code>node-name</code> each time (worker-02, worker-03, etc.).</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════ CHAPTER 8 ═══════════════════ -->
+<section id="ch8" class="fade-in">
+  <div class="section-header">
+    <div class="section-number">8</div>
+    <h2>Hands-On: High-Availability (HA) Setup</h2>
+  </div>
+
+  <p>For production, you need <strong style="color:var(--text)">3 server nodes</strong> so that if one dies, the cluster keeps running.</p>
+
+  <div class="callout callout-warn">
+    <div class="callout-icon">🗳️</div>
+    <div class="callout-body">
+      <div class="callout-title">Why 3 Servers? (The Quorum Rule)</div>
+      <p>etcd needs a <strong style="color:var(--text)">majority</strong> of nodes alive to accept writes. With 3 nodes, you can lose 1 (2/3 majority). With 2 nodes, losing 1 means no majority — cluster is stuck!</p>
+    </div>
+  </div>
+
+  <!-- ANIMATED HA DIAGRAM -->
+  <div class="visual-diagram" style="background:rgba(0,0,0,0.3);border:1px solid var(--border);border-radius:var(--radius);padding:32px 16px;margin:20px 0;">
+    <svg viewBox="0 0 700 280" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:700px;display:block;margin:0 auto;" font-family="Inter,system-ui,sans-serif">
+      <defs>
+        <linearGradient id="haAmb" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#d97706"/><stop offset="100%" stop-color="#fbbf24"/></linearGradient>
+        <linearGradient id="haPur" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#6366f1"/><stop offset="100%" stop-color="#8b5cf6"/></linearGradient>
+        <filter id="glowHA"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      </defs>
+
+      <!-- DNS label -->
+      <text x="350" y="18" text-anchor="middle" fill="#a1a1aa" font-size="11" font-weight="500">DNS: rke2.example.com</text>
+
+      <!-- Load Balancer -->
+      <rect x="250" y="30" width="200" height="44" rx="12" fill="url(#haAmb)" opacity="0.9">
+        <animate attributeName="opacity" values="0.85;1;0.85" dur="3s" repeatCount="indefinite"/>
+      </rect>
+      <text x="350" y="49" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">L4 Load Balancer</text>
+      <text x="350" y="65" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-size="9.5">ports 9345 &amp; 6443</text>
+
+      <!-- Lines LB → Servers -->
+      <line x1="290" y1="74" x2="140" y2="120" stroke="rgba(251,191,36,0.25)" stroke-width="1.5"/>
+      <line x1="350" y1="74" x2="350" y2="120" stroke="rgba(251,191,36,0.25)" stroke-width="1.5"/>
+      <line x1="410" y1="74" x2="560" y2="120" stroke="rgba(251,191,36,0.25)" stroke-width="1.5"/>
+      <circle r="3" fill="#fbbf24" filter="url(#glowHA)"><animateMotion dur="1.5s" repeatCount="indefinite" path="M290,74 L140,120"/></circle>
+      <circle r="3" fill="#fbbf24" filter="url(#glowHA)"><animateMotion dur="1.5s" repeatCount="indefinite" begin="0.5s" path="M350,74 L350,120"/></circle>
+      <circle r="3" fill="#fbbf24" filter="url(#glowHA)"><animateMotion dur="1.5s" repeatCount="indefinite" begin="1s" path="M410,74 L560,120"/></circle>
+
+      <!-- Server 1 -->
+      <rect x="50" y="120" width="180" height="100" rx="14" fill="rgba(99,102,241,0.08)" stroke="rgba(99,102,241,0.3)" stroke-width="1.5"/>
+      <rect x="50" y="120" width="180" height="28" rx="14" fill="url(#haPur)" opacity="0.85"/>
+      <rect x="50" y="134" width="180" height="14" fill="url(#haPur)" opacity="0.85"/>
+      <text x="140" y="140" text-anchor="middle" fill="#fff" font-weight="700" font-size="11">Server 1 (init)</text>
+      <g font-size="10" fill="#a1a1aa"><text x="70" y="165">apiserver · scheduler</text><text x="70" y="180">controller · kubelet</text></g>
+      <rect x="70" y="192" width="46" height="18" rx="5" fill="rgba(139,92,246,0.15)" stroke="rgba(139,92,246,0.25)" stroke-width="1"/>
+      <text x="93" y="205" text-anchor="middle" fill="#a78bfa" font-size="9" font-weight="600">etcd</text>
+      <circle cx="204" cy="135" r="4" fill="#34d399"><animate attributeName="r" values="3;5;3" dur="1.5s" repeatCount="indefinite"/></circle>
+
+      <!-- Server 2 -->
+      <rect x="260" y="120" width="180" height="100" rx="14" fill="rgba(99,102,241,0.08)" stroke="rgba(99,102,241,0.3)" stroke-width="1.5"/>
+      <rect x="260" y="120" width="180" height="28" rx="14" fill="url(#haPur)" opacity="0.85"/>
+      <rect x="260" y="134" width="180" height="14" fill="url(#haPur)" opacity="0.85"/>
+      <text x="350" y="140" text-anchor="middle" fill="#fff" font-weight="700" font-size="11">Server 2 (join)</text>
+      <g font-size="10" fill="#a1a1aa"><text x="280" y="165">apiserver · scheduler</text><text x="280" y="180">controller · kubelet</text></g>
+      <rect x="280" y="192" width="46" height="18" rx="5" fill="rgba(139,92,246,0.15)" stroke="rgba(139,92,246,0.25)" stroke-width="1"/>
+      <text x="303" y="205" text-anchor="middle" fill="#a78bfa" font-size="9" font-weight="600">etcd</text>
+      <circle cx="414" cy="135" r="4" fill="#34d399"><animate attributeName="r" values="3;5;3" dur="1.5s" begin="0.5s" repeatCount="indefinite"/></circle>
+
+      <!-- Server 3 -->
+      <rect x="470" y="120" width="180" height="100" rx="14" fill="rgba(99,102,241,0.08)" stroke="rgba(99,102,241,0.3)" stroke-width="1.5"/>
+      <rect x="470" y="120" width="180" height="28" rx="14" fill="url(#haPur)" opacity="0.85"/>
+      <rect x="470" y="134" width="180" height="14" fill="url(#haPur)" opacity="0.85"/>
+      <text x="560" y="140" text-anchor="middle" fill="#fff" font-weight="700" font-size="11">Server 3 (join)</text>
+      <g font-size="10" fill="#a1a1aa"><text x="490" y="165">apiserver · scheduler</text><text x="490" y="180">controller · kubelet</text></g>
+      <rect x="490" y="192" width="46" height="18" rx="5" fill="rgba(139,92,246,0.15)" stroke="rgba(139,92,246,0.25)" stroke-width="1"/>
+      <text x="513" y="205" text-anchor="middle" fill="#a78bfa" font-size="9" font-weight="600">etcd</text>
+      <circle cx="624" cy="135" r="4" fill="#34d399"><animate attributeName="r" values="3;5;3" dur="1.5s" begin="1s" repeatCount="indefinite"/></circle>
+
+      <!-- etcd replication lines -->
+      <line x1="120" y1="200" x2="276" y2="200" stroke="rgba(167,139,250,0.35)" stroke-width="1.5" stroke-dasharray="4,3"><animate attributeName="stroke-opacity" values="0.2;0.6;0.2" dur="2s" repeatCount="indefinite"/></line>
+      <line x1="330" y1="200" x2="486" y2="200" stroke="rgba(167,139,250,0.35)" stroke-width="1.5" stroke-dasharray="4,3"><animate attributeName="stroke-opacity" values="0.2;0.6;0.2" dur="2s" begin="0.7s" repeatCount="indefinite"/></line>
+      <!-- etcd sync packets -->
+      <circle r="3" fill="#a78bfa" filter="url(#glowHA)"><animateMotion dur="2s" repeatCount="indefinite" path="M120,200 L276,200"/></circle>
+      <circle r="3" fill="#a78bfa" filter="url(#glowHA)"><animateMotion dur="2s" repeatCount="indefinite" path="M486,200 L330,200"/></circle>
+
+      <!-- Description -->
+      <text x="350" y="250" text-anchor="middle" fill="#71717a" font-size="10">Each server runs full control plane. etcd replicates across all 3 for quorum.</text>
+      <text x="350" y="268" text-anchor="middle" fill="#525263" font-size="9">Lose 1 server → cluster survives &nbsp;|&nbsp; Lose 2 servers → cluster down</text>
+    </svg>
+  </div>
+
+  <div class="step-card">
+    <div class="step-badge">Server 1 — The First Server</div>
+    <pre><code><span class="cmd">curl</span> <span class="flag">-sfL</span> https://get.rke2.io | <span class="cmd">sudo</span> sh -
+
+<span class="cmd">sudo</span> mkdir -p /etc/rancher/rke2
+<span class="cmd">sudo</span> tee /etc/rancher/rke2/config.yaml &lt;&lt;EOF
+<span class="string">token: my-shared-secret-token-12345</span>
+<span class="string">tls-san:</span>
+<span class="string">  - rke2.example.com</span>
+<span class="string">  - 10.0.0.100</span>
+<span class="string">  - 10.0.0.101</span>
+<span class="string">  - 10.0.0.102</span>
+EOF
+
+<span class="cmd">sudo</span> systemctl enable --now rke2-server.service
+<span class="comment"># Wait until fully ready before starting server 2!</span></code></pre>
+  </div>
+
+  <div class="step-card">
+    <div class="step-badge">Server 2 &amp; 3 — Joining Servers</div>
+    <pre><code><span class="cmd">curl</span> <span class="flag">-sfL</span> https://get.rke2.io | <span class="cmd">sudo</span> sh -
+
+<span class="cmd">sudo</span> mkdir -p /etc/rancher/rke2
+<span class="cmd">sudo</span> tee /etc/rancher/rke2/config.yaml &lt;&lt;EOF
+<span class="string">server: https://10.0.0.100:9345</span>
+<span class="string">token: my-shared-secret-token-12345</span>
+<span class="string">tls-san:</span>
+<span class="string">  - rke2.example.com</span>
+<span class="string">  - 10.0.0.100</span>
+<span class="string">  - 10.0.0.101</span>
+<span class="string">  - 10.0.0.102</span>
+EOF
+
+<span class="cmd">sudo</span> systemctl enable --now rke2-server.service</code></pre>
+  </div>
+
+  <div class="step-card">
+    <div class="step-badge">Load Balancer — Example with Nginx</div>
+    <pre><code><span class="comment"># /etc/nginx/nginx.conf (on a separate LB machine)</span>
+stream {
+    upstream rke2_api {
+        least_conn;
+        server 10.0.0.100:6443 max_fails=3 fail_timeout=5s;
+        server 10.0.0.101:6443 max_fails=3 fail_timeout=5s;
+        server 10.0.0.102:6443 max_fails=3 fail_timeout=5s;
+    }
+    upstream rke2_supervisor {
+        least_conn;
+        server 10.0.0.100:9345 max_fails=3 fail_timeout=5s;
+        server 10.0.0.101:9345 max_fails=3 fail_timeout=5s;
+        server 10.0.0.102:9345 max_fails=3 fail_timeout=5s;
+    }
+    server { listen 6443; proxy_pass rke2_api; }
+    server { listen 9345; proxy_pass rke2_supervisor; }
+}</code></pre>
+  </div>
+</section>
+
+<!-- ═══════════════════ CHAPTER 9 ═══════════════════ -->
+<section id="ch9" class="fade-in">
+  <div class="section-header">
+    <div class="section-number">9</div>
+    <h2>Networking Deep Dive (CNI)</h2>
+  </div>
+
+  <div class="analogy">
+    <div class="analogy-label">Analogy</div>
+    <p>If pods are apartments in different buildings (nodes), the <strong style="color:var(--text)">CNI</strong> is the road system and phone lines that connect them. Without CNI, pods on different nodes can't talk to each other.</p>
+  </div>
+
+  <h3>Supported CNI Plugins</h3>
+  <div class="table-wrap">
+    <table>
+      <tr><th>CNI</th><th>What It Does</th><th>Best For</th></tr>
+      <tr>
+        <td><strong style="color:var(--green)">Canal</strong> (default)</td>
+        <td>Flannel (VXLAN overlay) + Calico (network policies). Simple, reliable.</td>
+        <td>Most use cases</td>
+      </tr>
+      <tr>
+        <td><strong style="color:var(--cyan)">Calico</strong></td>
+        <td>Full Calico: BGP routing + advanced network policies. No overlay = better perf.</td>
+        <td>Large clusters, bare metal</td>
+      </tr>
+      <tr>
+        <td><strong style="color:var(--accent-3)">Cilium</strong></td>
+        <td>eBPF-based networking. Advanced observability, L7 policies, service mesh.</td>
+        <td>Modern stacks, security</td>
+      </tr>
+      <tr>
+        <td><strong style="color:var(--amber)">Multus</strong></td>
+        <td>Meta-plugin: attaches multiple network interfaces to pods.</td>
+        <td>Telco / NFV workloads</td>
+      </tr>
+    </table>
+  </div>
+
+  <h3>How to Switch CNI</h3>
+  <pre><code><span class="comment"># In /etc/rancher/rke2/config.yaml BEFORE first start:</span>
+
+<span class="string">cni: cilium</span>    <span class="comment"># Option A: Cilium</span>
+<span class="string">cni: calico</span>    <span class="comment"># Option B: Calico</span>
+<span class="string">cni: multus,canal</span>  <span class="comment"># Option C: Multus + Canal</span></code></pre>
+
+  <div class="callout callout-danger">
+    <div class="callout-icon">⚠️</div>
+    <div class="callout-body">
+      <div class="callout-title">Important!</div>
+      <p>You must choose the CNI <em>before</em> the first server start. Changing CNI on a running cluster requires a full reinstall.</p>
+    </div>
+  </div>
+
+  <!-- ANIMATED VXLAN NETWORKING DIAGRAM -->
+  <div class="visual-diagram" style="background:rgba(0,0,0,0.3);border:1px solid var(--border);border-radius:var(--radius);padding:32px 16px;margin:20px 0;">
+    <svg viewBox="0 0 760 400" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:760px;display:block;margin:0 auto;" font-family="Inter,system-ui,sans-serif">
+      <defs>
+        <linearGradient id="netNode" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#6366f1"/><stop offset="100%" stop-color="#8b5cf6"/></linearGradient>
+        <linearGradient id="netPod" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#059669"/><stop offset="100%" stop-color="#34d399"/></linearGradient>
+        <linearGradient id="netBridge" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#06b6d4"/><stop offset="100%" stop-color="#22d3ee"/></linearGradient>
+        <linearGradient id="netTunnel" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#fbbf24"/><stop offset="100%" stop-color="#f59e0b"/></linearGradient>
+        <filter id="glowN"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        <filter id="glowPacket"><feGaussianBlur stdDeviation="6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      </defs>
+
+      <!-- ─── NODE A ─── -->
+      <rect x="20" y="10" width="330" height="320" rx="18" fill="rgba(99,102,241,0.05)" stroke="rgba(99,102,241,0.2)" stroke-width="1.5"/>
+      <text x="185" y="36" text-anchor="middle" fill="#a78bfa" font-weight="700" font-size="13">Node A</text>
+      <text x="185" y="52" text-anchor="middle" fill="#71717a" font-size="10">10.0.0.100</text>
+
+      <!-- Pods A & B -->
+      <rect x="50" y="66" width="120" height="50" rx="10" fill="rgba(52,211,153,0.08)" stroke="rgba(52,211,153,0.3)" stroke-width="1.2"/>
+      <text x="110" y="86" text-anchor="middle" fill="#34d399" font-weight="600" font-size="11">Pod A</text>
+      <text x="110" y="102" text-anchor="middle" fill="#71717a" font-size="9.5">10.42.0.5</text>
+      <rect x="200" y="66" width="120" height="50" rx="10" fill="rgba(52,211,153,0.08)" stroke="rgba(52,211,153,0.3)" stroke-width="1.2"/>
+      <text x="260" y="86" text-anchor="middle" fill="#34d399" font-weight="600" font-size="11">Pod B</text>
+      <text x="260" y="102" text-anchor="middle" fill="#71717a" font-size="9.5">10.42.0.6</text>
+
+      <!-- veth lines -->
+      <line x1="110" y1="116" x2="110" y2="145" stroke="rgba(34,211,238,0.3)" stroke-width="1.5"/>
+      <line x1="260" y1="116" x2="260" y2="145" stroke="rgba(34,211,238,0.3)" stroke-width="1.5"/>
+
+      <!-- cni0 bridge -->
+      <rect x="50" y="145" width="270" height="40" rx="10" fill="rgba(34,211,238,0.08)" stroke="rgba(34,211,238,0.25)" stroke-width="1.2"/>
+      <text x="185" y="162" text-anchor="middle" fill="#22d3ee" font-weight="600" font-size="11">veth pairs → cni0 bridge</text>
+      <text x="185" y="177" text-anchor="middle" fill="#525263" font-size="9">virtual ethernet</text>
+
+      <!-- line to flannel -->
+      <line x1="185" y1="185" x2="185" y2="215" stroke="rgba(34,211,238,0.3)" stroke-width="1.5"/>
+
+      <!-- flannel.1 -->
+      <rect x="50" y="215" width="270" height="44" rx="10" fill="rgba(251,191,36,0.08)" stroke="rgba(251,191,36,0.25)" stroke-width="1.2"/>
+      <text x="185" y="234" text-anchor="middle" fill="#fbbf24" font-weight="600" font-size="11">flannel.1</text>
+      <text x="185" y="250" text-anchor="middle" fill="#71717a" font-size="9.5">VXLAN tunnel endpoint</text>
+
+      <!-- eth0 -->
+      <line x1="185" y1="259" x2="185" y2="285" stroke="rgba(255,255,255,0.1)" stroke-width="1.5"/>
+      <rect x="110" y="285" width="150" height="30" rx="8" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+      <text x="185" y="305" text-anchor="middle" fill="#a1a1aa" font-size="10.5" font-weight="500">eth0: 10.0.0.100</text>
+
+      <!-- ─── NODE B ─── -->
+      <rect x="410" y="10" width="330" height="320" rx="18" fill="rgba(99,102,241,0.05)" stroke="rgba(99,102,241,0.2)" stroke-width="1.5"/>
+      <text x="575" y="36" text-anchor="middle" fill="#a78bfa" font-weight="700" font-size="13">Node B</text>
+      <text x="575" y="52" text-anchor="middle" fill="#71717a" font-size="10">10.0.0.101</text>
+
+      <!-- Pods C & D -->
+      <rect x="440" y="66" width="120" height="50" rx="10" fill="rgba(52,211,153,0.08)" stroke="rgba(52,211,153,0.3)" stroke-width="1.2"/>
+      <text x="500" y="86" text-anchor="middle" fill="#34d399" font-weight="600" font-size="11">Pod C</text>
+      <text x="500" y="102" text-anchor="middle" fill="#71717a" font-size="9.5">10.42.1.8</text>
+      <rect x="590" y="66" width="120" height="50" rx="10" fill="rgba(52,211,153,0.08)" stroke="rgba(52,211,153,0.3)" stroke-width="1.2"/>
+      <text x="650" y="86" text-anchor="middle" fill="#34d399" font-weight="600" font-size="11">Pod D</text>
+      <text x="650" y="102" text-anchor="middle" fill="#71717a" font-size="9.5">10.42.1.9</text>
+
+      <!-- veth lines -->
+      <line x1="500" y1="116" x2="500" y2="145" stroke="rgba(34,211,238,0.3)" stroke-width="1.5"/>
+      <line x1="650" y1="116" x2="650" y2="145" stroke="rgba(34,211,238,0.3)" stroke-width="1.5"/>
+
+      <!-- cni0 bridge -->
+      <rect x="440" y="145" width="270" height="40" rx="10" fill="rgba(34,211,238,0.08)" stroke="rgba(34,211,238,0.25)" stroke-width="1.2"/>
+      <text x="575" y="162" text-anchor="middle" fill="#22d3ee" font-weight="600" font-size="11">veth pairs → cni0 bridge</text>
+      <text x="575" y="177" text-anchor="middle" fill="#525263" font-size="9">virtual ethernet</text>
+
+      <line x1="575" y1="185" x2="575" y2="215" stroke="rgba(34,211,238,0.3)" stroke-width="1.5"/>
+
+      <!-- flannel.1 -->
+      <rect x="440" y="215" width="270" height="44" rx="10" fill="rgba(251,191,36,0.08)" stroke="rgba(251,191,36,0.25)" stroke-width="1.2"/>
+      <text x="575" y="234" text-anchor="middle" fill="#fbbf24" font-weight="600" font-size="11">flannel.1</text>
+      <text x="575" y="250" text-anchor="middle" fill="#71717a" font-size="9.5">VXLAN tunnel endpoint</text>
+
+      <line x1="575" y1="259" x2="575" y2="285" stroke="rgba(255,255,255,0.1)" stroke-width="1.5"/>
+      <rect x="500" y="285" width="150" height="30" rx="8" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+      <text x="575" y="305" text-anchor="middle" fill="#a1a1aa" font-size="10.5" font-weight="500">eth0: 10.0.0.101</text>
+
+      <!-- ═══ VXLAN TUNNEL ═══ -->
+      <!-- Glowing tunnel line -->
+      <line x1="320" y1="237" x2="440" y2="237" stroke="rgba(251,191,36,0.15)" stroke-width="20" stroke-linecap="round">
+        <animate attributeName="stroke-opacity" values="0.05;0.2;0.05" dur="3s" repeatCount="indefinite"/>
+      </line>
+      <line x1="320" y1="237" x2="440" y2="237" stroke="rgba(251,191,36,0.4)" stroke-width="2" stroke-dasharray="8,4">
+        <animate attributeName="stroke-dashoffset" from="0" to="-24" dur="1s" repeatCount="indefinite"/>
+      </line>
+      <line x1="320" y1="237" x2="440" y2="237" stroke="rgba(251,191,36,0.4)" stroke-width="2" stroke-dasharray="8,4">
+        <animate attributeName="stroke-dashoffset" from="-24" to="0" dur="1s" repeatCount="indefinite"/>
+      </line>
+
+      <!-- Animated data packets flowing through tunnel -->
+      <circle r="5" fill="#fbbf24" filter="url(#glowPacket)">
+        <animateMotion dur="1.8s" repeatCount="indefinite" path="M320,237 L440,237"/>
+        <animate attributeName="opacity" values="0;1;1;0" dur="1.8s" repeatCount="indefinite"/>
+      </circle>
+      <circle r="4" fill="#22d3ee" filter="url(#glowPacket)">
+        <animateMotion dur="2.2s" repeatCount="indefinite" begin="0.9s" path="M440,237 L320,237"/>
+        <animate attributeName="opacity" values="0;1;1;0" dur="2.2s" repeatCount="indefinite" begin="0.9s"/>
+      </circle>
+      <circle r="3" fill="#34d399" filter="url(#glowN)">
+        <animateMotion dur="1.5s" repeatCount="indefinite" begin="0.4s" path="M320,237 L440,237"/>
+        <animate attributeName="opacity" values="0;0.8;0.8;0" dur="1.5s" repeatCount="indefinite" begin="0.4s"/>
+      </circle>
+
+      <!-- UDP label -->
+      <text x="380" y="225" text-anchor="middle" fill="#fbbf24" font-weight="700" font-size="10">VXLAN</text>
+      <text x="380" y="255" text-anchor="middle" fill="#71717a" font-size="9">UDP 8472</text>
+
+      <!-- ═══ SUCCESS MESSAGE ═══ -->
+      <g transform="translate(0, 345)">
+        <rect x="140" y="0" width="480" height="38" rx="10" fill="rgba(52,211,153,0.08)" stroke="rgba(52,211,153,0.2)" stroke-width="1">
+          <animate attributeName="stroke-opacity" values="0.2;0.5;0.2" dur="2s" repeatCount="indefinite"/>
+        </rect>
+        <text x="380" y="16" text-anchor="middle" fill="#34d399" font-weight="600" font-size="11">
+          Pod A (10.42.0.5) → VXLAN tunnel → Pod C (10.42.1.8)
+        </text>
+        <text x="380" y="32" text-anchor="middle" fill="#34d399" font-size="12" font-weight="700">✓ Cross-node communication works!</text>
+      </g>
+    </svg>
+    <div class="diagram-caption" style="color:var(--text-muted);font-size:0.8rem;text-align:center;margin-top:12px;">Canal/Flannel VXLAN overlay networking — packets are encapsulated and sent through a UDP tunnel between nodes</div>
+  </div>
+</section>
+
+<!-- ═══════════════════ CHAPTER 10 ═══════════════════ -->
+<section id="ch10" class="fade-in">
+  <div class="section-header">
+    <div class="section-number">10</div>
+    <h2>Security &amp; CIS Hardening</h2>
+  </div>
+
+  <p>Security is RKE2's biggest selling point. Let's understand what it does automatically and what you need to do manually.</p>
+
+  <h3>What RKE2 Does Automatically</h3>
+  <div class="bento">
+    <div class="bento-card">
+      <div class="bento-icon purple">🔐</div>
+      <h4>Secrets Encryption at Rest</h4>
+      <p>K8s Secrets stored in etcd are encrypted. Attackers with access to etcd data can't read your passwords.</p>
+    </div>
+    <div class="bento-card">
+      <div class="bento-icon blue">🛡️</div>
+      <h4>Pod Security Standards</h4>
+      <p>With <code>profile: cis</code>, RKE2 enforces restricted pod security blocking privileged containers by default.</p>
+    </div>
+    <div class="bento-card">
+      <div class="bento-icon green">🌐</div>
+      <h4>Network Policies</h4>
+      <p>Canal/Calico enforces network policy rules defining which pods can communicate.</p>
+    </div>
+    <div class="bento-card">
+      <div class="bento-icon amber">📝</div>
+      <h4>Audit Logging</h4>
+      <p>API server audit logs record who did what and when. Found at <code>/var/lib/rancher/rke2/server/logs/</code>.</p>
+    </div>
+    <div class="bento-card">
+      <div class="bento-icon cyan">🏛️</div>
+      <h4>FIPS 140-2 Cryptography</h4>
+      <p>All TLS uses FIPS-validated BoringCrypto — required by government agencies.</p>
+    </div>
+    <div class="bento-card">
+      <div class="bento-icon rose">🎯</div>
+      <h4>Minimal Attack Surface</h4>
+      <p>No Docker daemon. Container images scanned with Trivy. Only essential components run.</p>
+    </div>
+  </div>
+
+  <h3>What You Must Do Manually</h3>
+  <pre><code><span class="comment"># 1. Enable the CIS profile in config</span>
+<span class="string">profile: cis</span>
+
+<span class="comment"># 2. Set kernel parameters (on EVERY node)</span>
+<span class="cmd">sudo</span> tee /etc/sysctl.d/90-rke2-cis.conf &lt;&lt;EOF
+vm.panic_on_oom=0
+vm.overcommit_memory=1
+kernel.panic=10
+kernel.panic_on_oops=1
+EOF
+<span class="cmd">sudo</span> sysctl --system
+
+<span class="comment"># 3. Create the etcd user (required for CIS profile)</span>
+<span class="cmd">sudo</span> useradd -r -c "etcd user" -s /sbin/nologin -M etcd -U
+
+<span class="comment"># 4. Protect the etcd data directory</span>
+<span class="cmd">sudo</span> chmod 700 /var/lib/rancher/rke2/server/db</code></pre>
+</section>
+
+<!-- ═══════════════════ CHAPTER 11 ═══════════════════ -->
+<section id="ch11" class="fade-in">
+  <div class="section-header">
+    <div class="section-number">11</div>
+    <h2>Configuration Reference</h2>
+  </div>
+
+  <pre><code><span class="comment"># /etc/rancher/rke2/config.yaml — Complete Reference</span>
+
+<span class="comment"># ── Cluster Identity ──</span>
+<span class="string">node-name: prod-server-01</span>            <span class="comment"># Friendly node name</span>
+<span class="string">token: my-super-secret-token</span>         <span class="comment"># Shared secret for joining</span>
+<span class="string">server: https://lb.example.com:9345</span>  <span class="comment"># Only for joining nodes</span>
+
+<span class="comment"># ── TLS ──</span>
+<span class="string">tls-san:</span>
+<span class="string">  - lb.example.com</span>
+<span class="string">  - 10.0.0.100</span>
+
+<span class="comment"># ── Security ──</span>
+<span class="string">profile: cis</span>
+<span class="string">secrets-encryption: true</span>
+<span class="string">write-kubeconfig-mode: "0600"</span>
+
+<span class="comment"># ── Networking ──</span>
+<span class="string">cni: canal</span>
+<span class="string">cluster-cidr: 10.42.0.0/16</span>
+<span class="string">service-cidr: 10.43.0.0/16</span>
+<span class="string">cluster-dns: 10.43.0.10</span>
+
+<span class="comment"># ── etcd ──</span>
+<span class="string">etcd-snapshot-schedule-cron: "0 */6 * * *"</span>
+<span class="string">etcd-snapshot-retention: 10</span>
+
+<span class="comment"># ── Container Runtime ──</span>
+<span class="string">system-default-registry: registry.example.com</span>
+
+<span class="comment"># ── Node Labels &amp; Taints ──</span>
+<span class="string">node-label:</span>
+<span class="string">  - environment=production</span>
+<span class="string">node-taint:</span>
+<span class="string">  - dedicated=control-plane:NoSchedule</span>
+
+<span class="comment"># ── Disable Components ──</span>
+<span class="string">disable:</span>
+<span class="string">  - rke2-ingress-nginx</span></code></pre>
+
+  <h3>File System Layout</h3>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Path</th><th>Purpose</th></tr>
+      <tr><td><code>/etc/rancher/rke2/config.yaml</code></td><td>Main configuration file</td></tr>
+      <tr><td><code>/etc/rancher/rke2/rke2.yaml</code></td><td>Kubeconfig for kubectl</td></tr>
+      <tr><td><code>/var/lib/rancher/rke2/bin/</code></td><td>Binaries: kubectl, crictl, ctr</td></tr>
+      <tr><td><code>/var/lib/rancher/rke2/server/</code></td><td>Server data: etcd, manifests, tls certs</td></tr>
+      <tr><td><code>/var/lib/rancher/rke2/server/node-token</code></td><td>Token for joining new nodes</td></tr>
+      <tr><td><code>/var/lib/rancher/rke2/server/db/</code></td><td>etcd database files</td></tr>
+      <tr><td><code>/var/lib/rancher/rke2/server/manifests/</code></td><td>Auto-deploy manifests</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- ═══════════════════ CHAPTER 12 ═══════════════════ -->
+<section id="ch12" class="fade-in">
+  <div class="section-header">
+    <div class="section-number">12</div>
+    <h2>Day-2 Operations: Upgrades, Backups &amp; Monitoring</h2>
+  </div>
+
+  <h3>Upgrading RKE2</h3>
+  <div class="callout callout-warn">
+    <div class="callout-icon">📌</div>
+    <div class="callout-body">
+      <div class="callout-title">Golden Rule of Upgrades</div>
+      <p>Always upgrade <strong style="color:var(--text)">server nodes first</strong>, one at a time, then agent nodes. Never skip more than one minor version.</p>
+    </div>
+  </div>
+
+  <pre><code><span class="comment"># Method 1: Automated with the install script</span>
+<span class="cmd">curl</span> <span class="flag">-sfL</span> https://get.rke2.io | INSTALL_RKE2_VERSION=<span class="string">"v1.31.2+rke2r1"</span> <span class="cmd">sudo</span> sh -
+<span class="cmd">sudo</span> systemctl restart rke2-server
+
+<span class="comment"># Method 2: System Upgrade Controller (recommended for HA)</span>
+<span class="cmd">kubectl</span> apply -f https://github.com/rancher/system-upgrade-controller/releases/latest/download/system-upgrade-controller.yaml</code></pre>
+
+  <h3>etcd Backups</h3>
+  <pre><code><span class="comment"># Take an on-demand snapshot</span>
+<span class="cmd">rke2</span> etcd-snapshot save --name my-backup
+
+<span class="comment"># List existing snapshots</span>
+<span class="cmd">rke2</span> etcd-snapshot ls
+<span class="output">Name                     Size     Created
+my-backup                3.2 MB   2026-03-17T10:30:00Z</span>
+
+<span class="comment"># Restore from a snapshot (disaster recovery)</span>
+<span class="cmd">sudo</span> systemctl stop rke2-server
+<span class="cmd">sudo</span> rke2 server --cluster-reset \
+  --cluster-reset-restore-path=/var/lib/rancher/rke2/server/db/snapshots/my-backup
+<span class="cmd">sudo</span> systemctl start rke2-server</code></pre>
+
+  <h3>Monitoring</h3>
+  <pre><code><span class="comment"># Quick health checks</span>
+<span class="cmd">kubectl</span> get nodes                   <span class="comment"># All nodes Ready?</span>
+<span class="cmd">kubectl</span> get pods -A                 <span class="comment"># All pods Running?</span>
+<span class="cmd">kubectl</span> top nodes                   <span class="comment"># CPU/Memory usage</span>
+<span class="cmd">kubectl</span> top pods -A                 <span class="comment"># Pod resource usage</span>
+
+<span class="comment"># Check etcd health</span>
+<span class="cmd">sudo</span> /var/lib/rancher/rke2/bin/etcdctl \
+  --cacert=/var/lib/rancher/rke2/server/tls/etcd/server-ca.crt \
+  --cert=/var/lib/rancher/rke2/server/tls/etcd/server-client.crt \
+  --key=/var/lib/rancher/rke2/server/tls/etcd/server-client.key \
+  endpoint health</code></pre>
+</section>
+
+<!-- ═══════════════════ CHAPTER 13 ═══════════════════ -->
+<section id="ch13" class="fade-in">
+  <div class="section-header">
+    <div class="section-number">13</div>
+    <h2>Troubleshooting Cheat Sheet</h2>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <tr><th>Problem</th><th>Diagnostic Command</th><th>Common Fix</th></tr>
+      <tr><td>Server won't start</td><td><code>journalctl -u rke2-server -f</code></td><td>Check port conflicts, firewall, disk space</td></tr>
+      <tr><td>Agent can't join</td><td><code>journalctl -u rke2-agent -f</code></td><td>Verify token, server URL, port 9345</td></tr>
+      <tr><td>Node "NotReady"</td><td><code>kubectl describe node &lt;name&gt;</code></td><td>Check CNI pods, disk/memory pressure</td></tr>
+      <tr><td>Pods stuck "Pending"</td><td><code>kubectl describe pod &lt;name&gt;</code></td><td>Not enough resources, taints</td></tr>
+      <tr><td>Pods can't connect</td><td><code>kubectl get pods -n kube-system</code></td><td>CNI pods running? UDP 8472 open?</td></tr>
+      <tr><td>kubectl not working</td><td><code>echo $KUBECONFIG</code></td><td>Set KUBECONFIG path</td></tr>
+      <tr><td>etcd unhealthy</td><td><code>etcdctl endpoint health</code></td><td>Check disk I/O, restore snapshot</td></tr>
+    </table>
+  </div>
+
+  <h3>Essential Commands</h3>
+  <pre><code><span class="comment"># ── Service Logs ──</span>
+<span class="cmd">journalctl</span> -u rke2-server -f
+<span class="cmd">journalctl</span> -u rke2-agent -f
+
+<span class="comment"># ── Container Runtime ──</span>
+<span class="cmd">sudo</span> /var/lib/rancher/rke2/bin/crictl ps
+<span class="cmd">sudo</span> /var/lib/rancher/rke2/bin/crictl logs &lt;id&gt;
+
+<span class="comment"># ── Network Debug ──</span>
+<span class="cmd">kubectl</span> run debug --image=busybox --rm -it -- sh
+
+<span class="comment"># ── Full Uninstall ──</span>
+<span class="cmd">sudo</span> /usr/local/bin/rke2-uninstall.sh          <span class="comment"># Server</span>
+<span class="cmd">sudo</span> /usr/local/bin/rke2-agent-uninstall.sh     <span class="comment"># Agent</span></code></pre>
+</section>
+
+<!-- ═══════════════════ CHAPTER 14 ═══════════════════ -->
+<section id="ch14" class="fade-in">
+  <div class="section-header">
+    <div class="section-number">14</div>
+    <h2>Real-World Example: Deploy an App End-to-End</h2>
+  </div>
+
+  <div class="analogy">
+    <div class="analogy-label">What We're Building</div>
+    <p>A simple Nginx web app with 3 replicas, exposed via a Service and Ingress so the outside world can reach it at <code>myapp.example.com</code>.</p>
+  </div>
+
+  <div class="step-card">
+    <div class="step-badge">Step 1 — Create a Deployment (3 replicas)</div>
+    <pre><code><span class="cmd">cat</span> &lt;&lt;EOF | <span class="cmd">kubectl</span> apply -f -
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-web-app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: my-web-app
+  template:
+    metadata:
+      labels:
+        app: my-web-app
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.25-alpine
+        ports:
+        - containerPort: 80
+        resources:
+          requests: { cpu: 100m, memory: 64Mi }
+          limits:   { cpu: 200m, memory: 128Mi }
+EOF
+
+<span class="cmd">kubectl</span> get deploy my-web-app
+<span class="output">NAME         READY   UP-TO-DATE   AVAILABLE
+my-web-app   3/3     3            3</span></code></pre>
+  </div>
+
+  <div class="step-card">
+    <div class="step-badge">Step 2 — Create a Service</div>
+    <pre><code><span class="cmd">cat</span> &lt;&lt;EOF | <span class="cmd">kubectl</span> apply -f -
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-web-app-svc
+spec:
+  selector:
+    app: my-web-app
+  ports:
+  - port: 80
+    targetPort: 80
+  type: ClusterIP
+EOF</code></pre>
+  </div>
+
+  <div class="step-card">
+    <div class="step-badge">Step 3 — Create an Ingress</div>
+    <pre><code><span class="cmd">cat</span> &lt;&lt;EOF | <span class="cmd">kubectl</span> apply -f -
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: my-web-app-ingress
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: myapp.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: my-web-app-svc
+            port:
+              number: 80
+EOF</code></pre>
+  </div>
+
+  <div class="step-card">
+    <div class="step-badge">Step 4 — Test It</div>
+    <pre><code><span class="comment"># Internal test</span>
+<span class="cmd">kubectl</span> run curl-test --image=curlimages/curl --rm -it -- \
+  curl http://my-web-app-svc.default.svc.cluster.local
+
+<span class="comment"># External test</span>
+<span class="cmd">curl</span> http://myapp.example.com
+
+<span class="comment"># Scale up!</span>
+<span class="cmd">kubectl</span> scale deployment my-web-app --replicas=5</code></pre>
+  </div>
+
+  <h3>The Full Request Flow</h3>
+  <div class="flow">
+    <div class="flow-item">Browser</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-item">DNS</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-item">NGINX Ingress</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-item">Service</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-item">Pod (Nginx)</div>
+  </div>
+</section>
+
+<!-- ═══════════════════ CHAPTER 15 ═══════════════════ -->
+<section id="ch15" class="fade-in">
+  <div class="section-header">
+    <div class="section-number">15</div>
+    <h2>Summary &amp; Where to Go Next</h2>
+  </div>
+
+  <h3>What You've Learned</h3>
+  <ul class="checklist">
+    <li>What RKE2 is and why it exists (security-first Kubernetes)</li>
+    <li>The full architecture: server nodes, agent nodes, and all core components</li>
+    <li>How RKE2 differs from K3s and RKE1</li>
+    <li>How to install a single-node cluster from scratch</li>
+    <li>How to add worker nodes and set up HA with 3 servers</li>
+    <li>How networking works (CNI: Canal, Calico, Cilium)</li>
+    <li>Security features and CIS benchmark hardening</li>
+    <li>Day-2 ops: upgrades, etcd backups, and monitoring</li>
+    <li>How to deploy a real application end-to-end</li>
+  </ul>
+
+  <h3>Recommended Next Steps</h3>
+  <div class="bento">
+    <div class="bento-card">
+      <div class="bento-icon blue">📚</div>
+      <h4>Official Docs</h4>
+      <p>Read the full docs at <a href="https://docs.rke2.io" target="_blank">docs.rke2.io</a> — the Configuration and Advanced sections.</p>
+    </div>
+    <div class="bento-card">
+      <div class="bento-icon purple">🖥️</div>
+      <h4>Rancher Manager</h4>
+      <p>Install Rancher on top of RKE2 for a beautiful web UI to manage clusters and workloads.</p>
+    </div>
+    <div class="bento-card">
+      <div class="bento-icon green">💾</div>
+      <h4>Longhorn Storage</h4>
+      <p>Add distributed storage with Longhorn — Rancher's cloud-native storage solution.</p>
+    </div>
+    <div class="bento-card">
+      <div class="bento-icon amber">🔐</div>
+      <h4>cert-manager</h4>
+      <p>Automate TLS certificate management with Let's Encrypt for your Ingress resources.</p>
+    </div>
+  </div>
+
+  <div class="callout callout-success" style="text-align: center; margin-top: 40px;">
+    <div class="callout-body">
+      <div class="callout-title" style="font-size: 1.2rem;">You're Now RKE2 Ready!</div>
+      <p>You've gone from zero knowledge to understanding RKE2's architecture, security model, installation process, and day-to-day operations. Go build something amazing.</p>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- ═══════════════════ FOOTER ═══════════════════ -->
+<footer>
+  <p style="color:var(--text-secondary)"><strong>RKE2 Deep Dive Guide</strong> — 2026 Edition</p>
+  <div class="footer-links">
+    <a href="https://docs.rke2.io" target="_blank">Official Docs</a>
+    <a href="https://github.com/rancher/rke2" target="_blank">GitHub</a>
+    <a href="https://www.suse.com/products/rancher-kubernetes-engine/" target="_blank">SUSE</a>
+  </div>
+  <div style="margin-top:20px;padding-top:20px;border-top:1px solid rgba(255,255,255,0.06);">
+    <p style="margin:0;color:var(--text-secondary);font-size:0.85rem;">&copy; 2026 Sim Vattanac. All rights reserved.</p>
+    <p style="margin:6px 0 0;font-size:0.8rem;"><a href="mailto:vattanacsim99@gmail.com" style="color:var(--cyan);">vattanacsim99@gmail.com</a></p>
+  </div>
+</footer>
+
+</div><!-- /wrapper -->
+
+<!-- ═══════════════════ SCROLL ANIMATION + COPY BUTTONS ═══════════════════ -->
+<script>
+  // Scroll fade-in
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) entry.target.classList.add('visible');
+    });
+  }, { threshold: 0.08, rootMargin: '0px 0px -40px 0px' });
+  document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+
+  // Copy buttons for all <pre> code blocks (skip diagram SVG pres)
+  const copyIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
+  const checkIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+
+  document.querySelectorAll('pre').forEach(pre => {
+    // Skip pres inside .visual-diagram (SVG diagrams)
+    if (pre.closest('.visual-diagram') || pre.closest('.diagram')) return;
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'code-block';
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+
+    const btn = document.createElement('button');
+    btn.className = 'copy-btn';
+    btn.innerHTML = copyIcon + '<span>Copy</span>';
+    wrapper.appendChild(btn);
+
+    btn.addEventListener('click', () => {
+      const code = pre.textContent;
+      navigator.clipboard.writeText(code).then(() => {
+        btn.classList.add('copied');
+        btn.innerHTML = checkIcon + '<span>Copied!</span>';
+        setTimeout(() => {
+          btn.classList.remove('copied');
+          btn.innerHTML = copyIcon + '<span>Copy</span>';
+        }, 2000);
+      });
+    });
+  });
+</script>
+
+</body>
+</html>
