@@ -49,6 +49,12 @@ This playbook is intended to:
 | ArgoCD Guide | [argocd-guide-doc](https://argocd-guide-doc.netlify.app/) |
 | RKE2 Deep Dive Guide | [rke2-deep-dive-guide](https://rke2-deep-dive-guide.netlify.app/) |
 
+### 🖥️ Software Development
+
+| Topic | Link |
+|-------|------|
+| Peterson's Algorithm | [peterson-algorithm](https://peterson-algorithm.netlify.app/) |
+
 ---
 
 > *Maintained by Sim Vattanac — continuously updated as knowledge evolves.*
